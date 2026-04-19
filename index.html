@@ -1,31 +1,34 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <style>
+        #tablero { 
+            position: relative; 
+            width: 500px; 
+            height: 500px; 
+            background-image: url('tablero_limpio.png'); 
+            background-size: contain; 
+        }
+        .ficha { 
+            position: absolute; 
+            width: 40px; 
+            transition: all 0.5s; 
+        }
+    </style>
+</head>
 <body>
-    <h2 id="estado">Jugador en casilla: 0</h2>
-    <div id="tablero" style="display:grid; grid-template-columns: repeat(13, 30px); gap: 2px;"></div>
-    <button onclick="moverFicha()">Lanzar Dado</button>
+    <div id="tablero">
+        <img src="ficha_roja.png" class="ficha" id="fichaRoja" style="top: 50px; left: 50px;">
+    </div>
+    
+    <img id="dado" src="dado_1.png" style="width: 50px;">
+    <button onclick="lanzarDado()">Lanzar Dado</button>
 
     <script>
-        let posicion = 0;
-        const tablero = document.getElementById('tablero');
-
-        // Dibujar casillas
-        for(let i=0; i<52; i++) {
-            let div = document.createElement('div');
-            div.style.border = "1px solid black";
-            div.style.height = "30px";
-            div.id = "c-" + i;
-            tablero.appendChild(div);
-        }
-
-        function moverFicha() {
-            let dado = Math.floor(Math.random() * 6) + 1;
-            posicion = (posicion + dado) % 52;
-            document.getElementById('estado').innerText = "Casilla: " + posicion;
-            
-            // Limpiar tablero y poner ficha en nueva posición
-            document.querySelectorAll('div').forEach(d => d.innerText = "");
-            document.getElementById('c-' + posicion).innerText = "🔴";
+        function lanzarDado() {
+            let resultado = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('dado').src = `dado_${resultado}.png`;
+            // Aquí moveremos la ficha después
         }
     </script>
 </body>
