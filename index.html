@@ -2,78 +2,70 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family</title>
+    <title>Mapeador Ludo Family</title>
     <style>
-        body { background: #2c3e50; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 10px; }
+        body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
         
-        /* Contenedor: tamaño automático basado en la imagen */
-        #contenedor-tablero { 
-            position: relative; 
-            width: 100%; 
-            max-width: 600px; /* Vuelve a un tamaño amplio */
-            margin: 0 auto; 
+        #contenedor-tablero {
+            position: relative;
+            width: 90vmin;
+            height: 90vmin;
+            cursor: crosshair;
         }
 
-        #tablero-img { width: 100%; height: auto; display: block; }
-        
-        .ficha { 
-            position: absolute; 
-            width: 6%; 
-            height: 6%; 
-            transition: all 0.3s ease; 
-            z-index: 10; 
-            cursor: pointer;
+        #tablero-img {
+            width: 100%;
+            height: 100%;
+            display: block;
         }
+
+        #ficha {
+            position: absolute;
+            font-size: 30px;
+            transition: all 0.3s;
+            top: 5%; 
+            left: 5%;
+        }
+
+        #panel-datos { margin-top: 20px; width: 100%; max-width: 500px; }
+        textarea { width: 100%; height: 100px; }
     </style>
 </head>
 <body>
 
-    <h1>Ludo Family</h1>
+    <h1>Ludo Family: Mapeador</h1>
+    <p>Haz clic en el tablero para obtener las coordenadas</p>
     
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
-        <img src="imagen/roja_1.png" class="ficha" id="roja_1" onclick="seleccionarFicha('roja_1')">
-        <img src="imagen/roja_2.png" class="ficha" id="roja_2" onclick="seleccionarFicha('roja_2')">
-        <img src="imagen/roja_3.png" class="ficha" id="roja_3" onclick="seleccionarFicha('roja_3')">
-        <img src="imagen/roja_4.png" class="ficha" id="roja_4" onclick="seleccionarFicha('roja_4')">
+        <div id="ficha">🔴</div>
     </div>
 
-    <h2 id="info">Lanza el dado</h2>
-    <img id="dado-img" src="imagen/dado_1.png" style="width: 15%; display: block; margin: 10px auto;">
-    <button onclick="lanzarDado()" style="padding: 10px 20px; font-size: 16px;">Lanzar Dado</button>
+    <div id="panel-datos">
+        <p>Coordenadas obtenidas:</p>
+        <textarea id="listaCoordenadas" readonly></textarea>
+        <button onclick="limpiar()" style="margin-top:10px;">Limpiar</button>
+    </div>
 
     <script>
-        const mapa = [[74.8, 17.0], [73.1, 27.9], [88.5, 26.3], [87.3, 11.9], [90.1, 45.8], [82.4, 44.6], [75.6, 44.4], [68.7, 44.2], [62.8, 43.9], [56.2, 38.5], [56.1, 32.1], [56.8, 23.2], [57.2, 16.8], [55.5, 11.1], [56.4, 4.3], [50.0, 4.5], [43.2, 4.9], [43.3, 11.7], [44.3, 18.3], [42.6, 25.3], [43.7, 31.3], [44.0, 38.1], [36.4, 43.9], [30.5, 43.7], [23.7, 43.8], [16.5, 43.7], [10.1, 44.1], [3.5, 43.9], [4.5, 50.3], [3.6, 58.0], [11.2, 57.8], [18.5, 57.6], [24.1, 58.4], [30.9, 58.3], [37.7, 58.4], [43.2, 64.2], [43.9, 70.9], [44.3, 78.3], [44.2, 84.4], [44.5, 91.3], [44.6, 96.6], [49.6, 95.7], [57.8, 96.9], [57.3, 89.7], [57.0, 83.0], [56.9, 76.1], [57.3, 70.9], [56.7, 63.2], [63.2, 57.3], [69.7, 57.1], [77.5, 57.4], [84.4, 58.4], [91.1, 57.9], [96.9, 56.5], [97.0, 50.9], [89.5, 50.2], [81.9, 50.8], [75.9, 50.7], [68.1, 50.8], [62.2, 49.8], [55.1, 51.4]];
+        const lista = document.getElementById('listaCoordenadas');
 
-        let dadoActual = 0;
-        let estadosFichas = { roja_1: 0, roja_2: 1, roja_3: 2, roja_4: 3 };
+        document.getElementById('contenedor-tablero').addEventListener('click', (e) => {
+            let rect = e.target.getBoundingClientRect();
+            // Si clicaste en la imagen o en el contenedor, calculamos relativo al contenedor
+            let x = ((e.clientX - rect.left) / rect.width) * 100;
+            let y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            let coord = `[${y.toFixed(1)}, ${x.toFixed(1)}], `;
+            lista.value += coord;
+            
+            // Mover la ficha visualmente para confirmar
+            let ficha = document.getElementById('ficha');
+            ficha.style.top = (y - 2) + "%";
+            ficha.style.left = (x - 2) + "%";
+        });
 
-        function lanzarDado() {
-            dadoActual = Math.floor(Math.random() * 6) + 1;
-            document.getElementById('dado-img').src = "imagen/dado_" + dadoActual + ".png";
-            document.getElementById('info').innerText = "Toca una ficha para mover " + dadoActual;
-        }
-
-        function seleccionarFicha(id) {
-            if (dadoActual === 0) return;
-            if (estadosFichas[id] < 4) estadosFichas[id] = 4; 
-            else estadosFichas[id] = Math.min(estadosFichas[id] + dadoActual, mapa.length - 1);
-
-            let pos = mapa[estadosFichas[id]];
-            let ficha = document.getElementById(id);
-            ficha.style.top = pos[0] + "%";
-            ficha.style.left = pos[1] + "%";
-            dadoActual = 0;
-            document.getElementById('info').innerText = "Lanza el dado de nuevo.";
-        }
-
-        window.onload = () => {
-            for(let id in estadosFichas) {
-                let pos = mapa[estadosFichas[id]];
-                document.getElementById(id).style.top = pos[0] + "%";
-                document.getElementById(id).style.left = pos[1] + "%";
-            }
-        };
+        function limpiar() { lista.value = ""; }
     </script>
 </body>
 </html>
