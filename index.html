@@ -8,15 +8,28 @@
 </head>
 <body>
 
-    <div id="juego-contenedor">
+    <div id="vista-login" class="pantalla">
         <h1>Ludo Family</h1>
-        
-        <div class="controles-dado">
-            <button id="boton-dado" onclick="lanzarDado()">Lanzar Dado</button>
-            <div id="resultado-dado">?</div>
-        </div>
-        
-        <img src="imagen/tablero_limpio.png" alt="Tablero de Ludo">
+        <input type="text" id="input-alias" placeholder="Ingresa tu Apodo">
+        <button onclick="guardarUsuario()">Entrar</button>
+    </div>
+
+    <div id="vista-menu" class="pantalla" style="display:none;">
+        <h2>¿Cómo quieres jugar?</h2>
+        <button onclick="seleccionarModo('online')">Online</button>
+        <button onclick="seleccionarModo('local')">Local</button>
+    </div>
+
+    <div id="vista-jugadores" class="pantalla" style="display:none;">
+        <h2>¿Cuántos jugadores?</h2>
+        <button onclick="irASalas(2)">2 Jugadores</button>
+        <button onclick="irASalas(4)">4 Jugadores</button>
+    </div>
+
+    <div id="vista-salas" class="pantalla" style="display:none;">
+        <h2>Salas Disponibles</h2>
+        <button onclick="crearSala()">Crear Sala Propia</button>
+        <div id="lista-salas"></div>
     </div>
 
     <script src="script.js"></script>
