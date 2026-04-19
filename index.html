@@ -2,13 +2,15 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <title>Mapeo Ludo Family</title>
     <style>
-        body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; }
+        body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; padding: 20px; }
         
         #contenedor-tablero {
             position: relative;
             width: 90vmin;
             height: 90vmin;
+            cursor: crosshair; /* Indica que se puede hacer clic */
         }
 
         #tablero-img {
@@ -17,34 +19,54 @@
             display: block;
         }
 
-        #ficha {
-            position: absolute;
-            font-size: 30px;
-            transition: all 0.3s;
-            /* Ajusta esto según el tamaño de tu tablero */
-            top: 5%; 
-            left: 5%;
+        #panel-mapeo { 
+            margin-top: 20px; 
+            width: 100%; 
+            max-width: 600px; 
+            background: #34495e; 
+            padding: 15px; 
+            border-radius: 8px; 
+        }
+
+        textarea { 
+            width: 100%; 
+            height: 100px; 
+            margin-top: 10px; 
+            box-sizing: border-box; 
         }
     </style>
 </head>
 <body>
 
-    <h1>Ludo Family</h1>
+    <h1>Administrador: Mapeo de Casillas</h1>
+    <p>Haz clic en cada casilla en el orden correcto (0 al 51)</p>
+
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
-        <div id="ficha">🔴</div>
     </div>
 
-    <button onclick="moverFicha()" style="padding: 15px; margin-top: 20px; cursor: pointer;">Lanzar Dado</button>
+    <div id="panel-mapeo">
+        <p>Lista de coordenadas (copia esto cuando termines):</p>
+        <textarea id="listaCoordenadas" readonly></textarea>
+        <button onclick="limpiarLista()" style="margin-top:10px; padding: 5px 15px;">Limpiar lista</button>
+    </div>
 
     <script>
-        // Esta función mueve la ficha
-        function moverFicha() {
-            let ficha = document.getElementById('ficha');
-            // Un movimiento simple de prueba para verla saltar
-            let nuevaPos = Math.random() * 80 + 5; 
-            ficha.style.top = nuevaPos + "%";
-            ficha.style.left = nuevaPos + "%";
+        const lista = document.getElementById('listaCoordenadas');
+
+        document.getElementById('tablero-img').addEventListener('click', (e) => {
+            // Calculamos el porcentaje exacto de donde hiciste clic
+            let rect = e.target.getBoundingClientRect();
+            let x = ((e.clientX - rect.left) / rect.width) * 100;
+            let y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            // Agregamos al textarea con formato de array
+            let nuevaCoord = `[${y.toFixed(1)}, ${x.toFixed(1)}], `;
+            lista.value += nuevaCoord;
+        });
+
+        function limpiarLista() {
+            lista.value = "";
         }
     </script>
 </body>
