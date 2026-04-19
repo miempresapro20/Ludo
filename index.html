@@ -11,10 +11,12 @@
     <div id="juego-contenedor">
         <h1>Ludo Family</h1>
         
-        <img src="imagen/tablero_limpio.png" alt="Tablero de Ludo">
+        <div class="controles-dado">
+            <button id="boton-dado" onclick="lanzarDado()">Lanzar Dado</button>
+            <div id="resultado-dado">?</div>
+        </div>
         
-        <button id="boton-dado" onclick="lanzarDado()">Lanzar Dado</button>
-        <div id="resultado-dado">?</div>
+        <img src="imagen/tablero_limpio.png" alt="Tablero de Ludo">
     </div>
 
     <script src="script.js"></script>
