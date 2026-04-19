@@ -1,5 +1,6 @@
+/* Estilos base para centrar todo en la pantalla */
 body {
-    background-color: #2c3e50; /* Un tono oscuro para que el tablero resalte */
+    background-color: #2c3e50;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -9,22 +10,68 @@ body {
     color: white;
 }
 
+/* Contenedor principal que mantiene el tablero y los elementos dentro */
 #juego-contenedor {
     position: relative;
-    width: 90vmin; /* Se ajusta al tamaño de la pantalla del móvil */
+    width: 90vmin;
     height: 90vmin;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
+/* Estilo de la imagen del tablero */
 #juego-contenedor img {
     width: 100%;
     height: 100%;
     object-fit: contain;
 }
 
-/* Preparando el espacio para las fichas (lo usaremos luego) */
+/* Estilo del botón de lanzar dado */
+#boton-dado {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -150%); /* Ajustado para estar arriba del centro */
+    padding: 15px 25px;
+    font-size: 20px;
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+
+/* Estilo del número que muestra el dado */
+#resultado-dado {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, 50%); /* Ajustado para estar abajo del botón */
+    font-size: 50px;
+    font-weight: bold;
+    color: white;
+    background-color: rgba(0,0,0,0.5);
+    padding: 10px 20px;
+    border-radius: 10px;
+    z-index: 10;
+}
+
+/* Título oculto o minimalista */
+h1 {
+    position: absolute;
+    top: 2%;
+    margin: 0;
+    font-size: 24px;
+}
+
+/* Preparando espacio para fichas (para la siguiente fase) */
 .ficha {
     position: absolute;
-    width: 8%; /* Tamaño relativo a la casilla */
+    width: 8%;
     transition: all 0.3s ease;
-  }
-
+    z-index: 5;
+    }
+    
