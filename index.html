@@ -4,31 +4,21 @@
     <meta charset="UTF-8">
     <title>Ludo Family</title>
     <style>
-        body { 
-            background: #2c3e50; 
-            color: white; 
-            text-align: center; 
-            font-family: sans-serif; 
-            padding: 5px;
-            margin: 0;
-        }
-
-        /* Contenedor responsivo: se ajusta al ancho pero mantiene su forma */
+        body { background: #2c3e50; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 10px; }
+        
+        /* Contenedor: tamaño automático basado en la imagen */
         #contenedor-tablero { 
             position: relative; 
             width: 100%; 
-            max-width: 500px; /* Tamaño máximo para que no se vea gigante */
-            aspect-ratio: 1 / 1; /* Esto fuerza a que sea siempre un cuadrado */
+            max-width: 600px; /* Vuelve a un tamaño amplio */
             margin: 0 auto; 
-            border: 2px solid white;
-            box-sizing: border-box;
         }
 
-        #tablero-img { width: 100%; height: 100%; display: block; }
+        #tablero-img { width: 100%; height: auto; display: block; }
         
         .ficha { 
             position: absolute; 
-            width: 6%; /* Tamaño relativo para que sea proporcional */
+            width: 6%; 
             height: 6%; 
             transition: all 0.3s ease; 
             z-index: 10; 
