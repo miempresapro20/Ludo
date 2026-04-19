@@ -19,12 +19,21 @@
             display: block;
         }
 
-        /* Clase para las fichas manteniendo tu estructura */
+        /* Clase para las fichas fijas */
         .ficha-juego {
             position: absolute;
             width: 6%;
             height: 6%;
             z-index: 10;
+        }
+
+        /* Punto rojo para marcar mapeo */
+        #ficha-marcador {
+            position: absolute;
+            font-size: 30px;
+            z-index: 20;
+            pointer-events: none; /* Para que no interfiera con los clics */
+            transform: translate(-50%, -50%);
         }
     </style>
 </head>
@@ -36,6 +45,8 @@
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
         
+        <div id="ficha-marcador">🔴</div>
+
         <img src="imagen/verde_1.png" class="ficha-juego" style="top: 19.8%; left: 19.8%;">
         <img src="imagen/verde_2.png" class="ficha-juego" style="top: 19.8%; left: 31.8%;">
         <img src="imagen/verde_3.png" class="ficha-juego" style="top: 31.8%; left: 19.8%;">
@@ -65,6 +76,7 @@
 
     <script>
         const lista = document.getElementById('listaCoordenadas');
+        const marcador = document.getElementById('ficha-marcador');
 
         document.getElementById('contenedor-tablero').addEventListener('click', (e) => {
             let rect = e.target.getBoundingClientRect();
@@ -73,9 +85,16 @@
             
             let coord = `[${y.toFixed(1)}, ${x.toFixed(1)}], `;
             lista.value += coord;
+
+            // Mover el punto rojo
+            marcador.style.top = y + "%";
+            marcador.style.left = x + "%";
         });
 
-        function limpiar() { lista.value = ""; }
+        function limpiar() { 
+            lista.value = ""; 
+            marcador.style.top = "-10%"; // Ocultar punto
+        }
     </script>
 </body>
 </html>
