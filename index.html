@@ -2,24 +2,22 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Sistema Completo</title>
+    <title>Ludo Family: Motor de Juego Completo</title>
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
         #contenedor-tablero { position: relative; width: 90vmin; height: 90vmin; }
         #tablero-img { width: 100%; height: 100%; display: block; }
-        .ficha { position: absolute; width: 5%; height: 5%; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5); transform: translate(-50%, -50%); z-index: 10; cursor: pointer; transition: all 0.5s ease; }
+        .ficha { position: absolute; width: 5%; height: 5%; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5); transform: translate(-50%, -50%); z-index: 10; cursor: pointer; transition: all 0.3s ease; }
         #area-juego { margin-top: 20px; text-align: center; }
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
-
     <h1>Ludo Family</h1>
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
     </div>
-
     <div id="area-juego">
         <div id="indicador-turno">Turno: Verde</div>
         <img id="dado-img" src="" alt="Dado">
@@ -33,9 +31,7 @@
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
         
-        let estadoFichas = {};
-        codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
-        
+        // Coordenadas base (según tu original)
         const rutas = {
             'red': [[72.0, 28.5], [71.9, 12.2], [87.3, 14.1], [87.8, 29.0], [89.8, 44.1], [83.1, 43.9], [75.8, 44.0], [69.1, 44.1], [63.2, 44.6], [56.3, 37.6], [55.9, 30.6], [56.0, 23.9], [56.1, 17.3], [56.1, 11.0], [56.4, 4.4], [49.9, 4.2], [43.5, 3.7], [43.6, 10.4], [43.3, 18.4], [43.2, 24.4], [43.3, 30.6], [43.6, 38.1], [36.8, 44.3], [29.7, 43.9], [23.1, 44.0], [16.9, 44.1], [10.0, 44.1], [3.5, 44.2], [3.8, 50.8], [3.6, 57.5], [9.7, 57.1], [16.9, 57.9], [24.1, 58.0], [30.0, 57.5], [37.0, 56.8], [43.6, 63.9], [43.6, 70.6], [43.7, 77.0], [43.4, 84.4], [43.7, 90.9], [43.4, 97.1], [49.7, 96.6], [56.5, 96.5], [56.8, 90.6], [56.5, 83.4], [57.5, 76.8], [56.9, 70.2], [56.9, 63.8], [63.8, 56.7], [69.8, 57.0], [76.4, 57.3], [82.4, 57.5], [89.1, 57.1], [96.0, 57.9], [96.2, 50.7], [89.0, 50.7], [83.2, 50.3], [76.4, 50.6], [68.9, 51.0], [62.9, 51.2], [55.9, 51.0]],
             'blue': [[72.4, 73.1], [86.9, 73.5], [86.8, 88.4], [72.5, 87.4], [56.5, 91.4], [56.1, 83.9], [56.1, 77.1], [56.5, 70.5], [56.0, 64.2], [62.4, 58.0], [69.9, 56.7], [76.1, 57.1], [82.7, 57.1], [90.3, 56.7], [95.8, 57.3], [96.6, 50.9], [96.3, 43.5], [90.4, 43.9], [83.0, 43.9], [76.2, 43.5], [70.0, 44.3], [63.0, 43.8], [56.4, 37.2], [56.8, 30.3], [56.3, 24.8], [56.8, 17.7], [56.5, 11.2], [56.9, 4.4], [49.7, 3.9], [42.6, 3.7], [43.3, 10.8], [43.6, 18.0], [43.9, 24.4], [43.5, 30.5], [44.0, 37.5], [36.8, 44.1], [30.0, 44.2], [23.3, 43.7], [16.9, 43.9], [10.3, 43.7], [4.2, 43.9], [3.3, 50.6], [3.7, 57.5], [11.0, 57.1], [16.6, 57.5], [23.4, 57.1], [29.9, 57.1], [36.8, 56.9], [43.3, 63.9], [43.7, 70.3], [43.7, 77.2], [43.5, 83.7], [43.9, 90.2], [43.5, 97.3], [50.0, 97.2], [50.2, 90.2], [50.5, 83.4], [50.4, 76.5], [50.4, 69.7], [49.6, 64.4], [50.4, 56.6]],
@@ -43,13 +39,18 @@
             'yellow': [[28.0, 73.6], [28.0, 88.0], [13.9, 87.5], [13.6, 73.1], [9.8, 57.8], [16.5, 57.4], [24.1, 57.0], [29.6, 57.3], [36.5, 56.9], [43.1, 63.4], [43.7, 70.1], [43.3, 76.9], [42.9, 84.4], [43.5, 90.5], [43.4, 96.9], [49.7, 96.5], [56.4, 96.8], [56.9, 90.2], [56.8, 83.7], [56.8, 77.1], [56.5, 70.5], [56.4, 63.4], [62.8, 57.1], [69.2, 57.0], [75.9, 57.5], [83.2, 57.3], [90.0, 57.5], [96.7, 57.7], [96.5, 51.4], [96.2, 44.2], [89.3, 44.4], [83.3, 44.1], [75.6, 44.0], [69.7, 44.2], [62.7, 43.0], [56.4, 36.6], [56.2, 30.3], [56.0, 24.0], [56.2, 17.0], [56.0, 11.1], [56.3, 4.5], [49.6, 3.7], [43.5, 4.2], [42.9, 9.9], [43.2, 17.3], [43.2, 24.8], [43.4, 31.0], [43.3, 38.2], [36.9, 44.2], [30.0, 44.1], [23.6, 43.9], [17.4, 44.1], [9.6, 44.0], [3.8, 43.2], [2.9, 50.7], [10.0, 50.9], [16.6, 51.4], [23.0, 51.2], [30.0, 50.7], [36.7, 50.7], [43.9, 50.7]]
         };
 
+        let estadoFichas = {};
+        codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
+
+        // Inicializar fichas en base (coordenadas de base: 95%, 5% para simplificar)
         function crearFichasBase(color) {
             const contenedor = document.getElementById('contenedor-tablero');
-            for(let i=0; i<4; i++){
+            for(let i=0; i<4; i++) {
                 const ficha = document.createElement('div');
                 ficha.className = 'ficha';
                 ficha.style.backgroundColor = color;
-                ficha.style.top = "95%"; ficha.style.left = "5%"; 
+                ficha.style.top = "95%"; 
+                ficha.style.left = "5%";
                 ficha.id = `${color}-${i}`;
                 ficha.onclick = () => realizarMovimiento(color, i);
                 contenedor.appendChild(ficha);
@@ -58,57 +59,58 @@
         codigosColor.forEach(c => crearFichasBase(c));
 
         function lanzarDado() {
-            if(valorDado !== 0) return;
             valorDado = Math.floor(Math.random() * 6) + 1;
             document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
             document.getElementById('dado-img').style.display = 'inline-block';
         }
 
-        function realizarMovimiento(color, idx) {
+        function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
 
-            let posActual = estadoFichas[color][idx];
-            let targetPos = (posActual === -1) ? (valorDado === 6 || valorDado === 1 ? 4 : -1) : (posActual + valorDado);
+            let posActual = estadoFichas[color][i];
+            let nuevaPos;
 
-            if (targetPos !== -1 && targetPos < rutas[color].length) {
-                // Transporte: Mover todas las fichas en la misma casilla
-                estadoFichas[color].forEach((p, i) => {
-                    if (p === posActual) {
-                        estadoFichas[color][i] = targetPos;
-                        moverFichaVisual(color, i, targetPos);
-                    }
-                });
+            // Salida: Solo 1 o 6
+            if (posActual === -1) {
+                if (valorDado === 6 || valorDado === 1) {
+                    nuevaPos = 0; // Entra en la primera casilla de su ruta
+                } else { return; }
+            } else {
+                nuevaPos = posActual + valorDado;
+            }
 
-                // Captura: Regresar oponentes a base
-                codigosColor.forEach(cOp => {
-                    if (cOp !== color) {
-                        estadoFichas[cOp].forEach((pOp, iOp) => {
-                            if (pOp === targetPos) {
-                                estadoFichas[cOp][iOp] = -1;
-                                moverFichaVisual(cOp, iOp, -1);
+            if (nuevaPos < rutas[color].length) {
+                // Mover todas las fichas en la misma posición (Transporte)
+                codigosColor.forEach(c => {
+                    if (c === color) {
+                        estadoFichas[color].forEach((p, idx) => {
+                            if (p === posActual) {
+                                estadoFichas[color][idx] = nuevaPos;
+                                const ficha = document.getElementById(`${color}-${idx}`);
+                                ficha.style.top = rutas[color][nuevaPos][0] + "%";
+                                ficha.style.left = rutas[color][nuevaPos][1] + "%";
+                            }
+                        });
+                    } else {
+                        // Captura: Si hay oponentes, regresan a base
+                        estadoFichas[c].forEach((p, idx) => {
+                            if (p === nuevaPos) {
+                                estadoFichas[c][idx] = -1;
+                                const fichaOp = document.getElementById(`${c}-${idx}`);
+                                fichaOp.style.top = "95%"; 
+                                fichaOp.style.left = "5%";
                             }
                         });
                     }
                 });
 
-                // Turno: Extra si es 1 o 6
+                // Turno: Repite si 1 o 6
                 if (valorDado !== 1 && valorDado !== 6) {
                     turno = (turno + 1) % 4;
                     document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
                 }
-                
                 valorDado = 0;
                 document.getElementById('dado-img').style.display = 'none';
-            }
-        }
-
-        function moverFichaVisual(color, i, pos) {
-            const ficha = document.getElementById(`${color}-${i}`);
-            if (pos === -1) {
-                ficha.style.top = "95%"; ficha.style.left = "5%";
-            } else {
-                ficha.style.top = rutas[color][pos][0] + "%";
-                ficha.style.left = rutas[color][pos][1] + "%";
             }
         }
     </script>
