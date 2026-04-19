@@ -1,37 +1,32 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ludo Family</title>
-    <link rel="stylesheet" href="style.css">
-</head>
+<html>
 <body>
+    <h2 id="estado">Jugador en casilla: 0</h2>
+    <div id="tablero" style="display:grid; grid-template-columns: repeat(13, 30px); gap: 2px;"></div>
+    <button onclick="moverFicha()">Lanzar Dado</button>
 
-    <div id="vista-login" class="pantalla">
-        <h1>Ludo Family</h1>
-        <input type="text" id="input-alias" placeholder="Ingresa tu Apodo">
-        <button onclick="guardarUsuario()">Entrar</button>
-    </div>
+    <script>
+        let posicion = 0;
+        const tablero = document.getElementById('tablero');
 
-    <div id="vista-menu" class="pantalla" style="display:none;">
-        <h2>¿Cómo quieres jugar?</h2>
-        <button onclick="seleccionarModo('online')">Online</button>
-        <button onclick="seleccionarModo('local')">Local</button>
-    </div>
+        // Dibujar casillas
+        for(let i=0; i<52; i++) {
+            let div = document.createElement('div');
+            div.style.border = "1px solid black";
+            div.style.height = "30px";
+            div.id = "c-" + i;
+            tablero.appendChild(div);
+        }
 
-    <div id="vista-jugadores" class="pantalla" style="display:none;">
-        <h2>¿Cuántos jugadores?</h2>
-        <button onclick="irASalas(2)">2 Jugadores</button>
-        <button onclick="irASalas(4)">4 Jugadores</button>
-    </div>
-
-    <div id="vista-salas" class="pantalla" style="display:none;">
-        <h2>Salas Disponibles</h2>
-        <button onclick="crearSala()">Crear Sala Propia</button>
-        <div id="lista-salas"></div>
-    </div>
-
-    <script src="script.js"></script>
+        function moverFicha() {
+            let dado = Math.floor(Math.random() * 6) + 1;
+            posicion = (posicion + dado) % 52;
+            document.getElementById('estado').innerText = "Casilla: " + posicion;
+            
+            // Limpiar tablero y poner ficha en nueva posición
+            document.querySelectorAll('div').forEach(d => d.innerText = "");
+            document.getElementById('c-' + posicion).innerText = "🔴";
+        }
+    </script>
 </body>
 </html>
