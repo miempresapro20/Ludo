@@ -40,7 +40,7 @@
     <script>
         // --- Variables de Estado ---
         let turno = 0; 
-        let ultimoValorDado = 0;
+        let valorDado = 0;
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const nombresColores = { 'Verde': 'green', 'Amarillo': 'yellow', 'Azul': 'blue', 'Rojo': 'red' };
         
@@ -54,15 +54,15 @@
 
         function crearFichasBase(lista, color) {
             const contenedor = document.getElementById('contenedor-tablero');
-            const base = lista.slice(0, 4);
-            base.forEach((coord, index) => {
+            const colorKey = nombresColores[color];
+            lista.slice(0, 4).forEach((coord, index) => {
                 const ficha = document.createElement('div');
                 ficha.className = 'ficha';
-                ficha.style.backgroundColor = nombresColores[color];
+                ficha.style.backgroundColor = colorKey;
                 ficha.style.top = coord[0] + "%";
                 ficha.style.left = coord[1] + "%";
-                ficha.id = `${nombresColores[color]}-${index}`;
-                ficha.onclick = () => mover(nombresColores[color], index);
+                ficha.id = `${colorKey}-${index}`;
+                ficha.onclick = () => mover(colorKey, index);
                 contenedor.appendChild(ficha);
             });
         }
@@ -73,25 +73,30 @@
         crearFichasBase(rojos, 'Rojo');
 
         function lanzarDado() {
-            ultimoValorDado = Math.floor(Math.random() * 6) + 1;
-            document.getElementById('dado-img').src = `imagen/dado_${ultimoValorDado}.png`;
+            valorDado = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
             document.getElementById('dado-img').style.display = 'inline-block';
-            turno = (turno + 1) % 4;
-            document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
+            
+            // Si sacas 6, puedes mover, sino, rotamos turno (ajustar según tus reglas)
+            if (valorDado !== 6) {
+                turno = (turno + 1) % 4;
+                document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
+            }
         }
 
         function mover(color, i) {
-            if (ultimoValorDado === 0) return;
+            if (valorDado === 0) return;
             let pos = estadoFichas[color][i];
-            if (pos === -1 && ultimoValorDado === 6) pos = 0;
-            else if (pos !== -1) pos += ultimoValorDado;
+            
+            if (pos === -1 && valorDado === 6) pos = 0;
+            else if (pos !== -1) pos += valorDado;
 
             if (pos >= 0 && pos < rutas[color].length) {
                 estadoFichas[color][i] = pos;
                 const ficha = document.getElementById(`${color}-${i}`);
                 ficha.style.top = rutas[color][pos][0] + "%";
                 ficha.style.left = rutas[color][pos][1] + "%";
-                ultimoValorDado = 0; // Turno usado
+                valorDado = 0; // Turno usado
             }
         }
     </script>
