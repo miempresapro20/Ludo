@@ -1,34 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
     <style>
-        #tablero { 
-            position: relative; 
-            width: 500px; 
-            height: 500px; 
-            background-image: url('tablero_limpio.png'); 
-            background-size: contain; 
+        body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; }
+        
+        #contenedor-tablero {
+            position: relative;
+            width: 90vmin;
+            height: 90vmin;
         }
-        .ficha { 
-            position: absolute; 
-            width: 40px; 
-            transition: all 0.5s; 
+
+        #tablero-img {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #ficha {
+            position: absolute;
+            font-size: 30px;
+            transition: all 0.3s;
+            /* Ajusta esto según el tamaño de tu tablero */
+            top: 5%; 
+            left: 5%;
         }
     </style>
 </head>
 <body>
-    <div id="tablero">
-        <img src="ficha_roja.png" class="ficha" id="fichaRoja" style="top: 50px; left: 50px;">
+
+    <h1>Ludo Family</h1>
+    <div id="contenedor-tablero">
+        <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
+        <div id="ficha">🔴</div>
     </div>
-    
-    <img id="dado" src="dado_1.png" style="width: 50px;">
-    <button onclick="lanzarDado()">Lanzar Dado</button>
+
+    <button onclick="moverFicha()" style="padding: 15px; margin-top: 20px; cursor: pointer;">Lanzar Dado</button>
 
     <script>
-        function lanzarDado() {
-            let resultado = Math.floor(Math.random() * 6) + 1;
-            document.getElementById('dado').src = `dado_${resultado}.png`;
-            // Aquí moveremos la ficha después
+        // Esta función mueve la ficha
+        function moverFicha() {
+            let ficha = document.getElementById('ficha');
+            // Un movimiento simple de prueba para verla saltar
+            let nuevaPos = Math.random() * 80 + 5; 
+            ficha.style.top = nuevaPos + "%";
+            ficha.style.left = nuevaPos + "%";
         }
     </script>
 </body>
