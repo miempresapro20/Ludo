@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family</title>
+    <title>Mapeador Ludo Family</title>
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
         
@@ -10,6 +10,7 @@
             position: relative;
             width: 90vmin;
             height: 90vmin;
+            cursor: crosshair;
         }
 
         #tablero-img {
@@ -18,7 +19,8 @@
             display: block;
         }
 
-        .ficha {
+        /* Clase para las fichas manteniendo tu estructura */
+        .ficha-juego {
             position: absolute;
             width: 6%;
             height: 6%;
@@ -28,34 +30,52 @@
 </head>
 <body>
 
+    <h1>Ludo Family: Mapeador</h1>
+    <p>Haz clic en el tablero para obtener las coordenadas</p>
+    
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
         
-        <img src="imagen/verde_1.png" class="ficha" id="v1" style="top: 19.8%; left: 19.8%;">
-        <img src="imagen/verde_2.png" class="ficha" id="v2" style="top: 19.8%; left: 31.8%;">
-        <img src="imagen/verde_3.png" class="ficha" id="v3" style="top: 31.8%; left: 19.8%;">
-        <img src="imagen/verde_4.png" class="ficha" id="v4" style="top: 31.8%; left: 31.8%;">
+        <img src="imagen/verde_1.png" class="ficha-juego" style="top: 19.8%; left: 19.8%;">
+        <img src="imagen/verde_2.png" class="ficha-juego" style="top: 19.8%; left: 31.8%;">
+        <img src="imagen/verde_3.png" class="ficha-juego" style="top: 31.8%; left: 19.8%;">
+        <img src="imagen/verde_4.png" class="ficha-juego" style="top: 31.8%; left: 31.8%;">
 
-        <img src="imagen/amarilla_1.png" class="ficha" id="a1" style="top: 19.8%; left: 62.4%;">
-        <img src="imagen/amarilla_2.png" class="ficha" id="a2" style="top: 19.8%; left: 74.4%;">
-        <img src="imagen/amarilla_3.png" class="ficha" id="a3" style="top: 31.8%; left: 62.4%;">
-        <img src="imagen/amarilla_4.png" class="ficha" id="a4" style="top: 31.8%; left: 74.4%;">
+        <img src="imagen/amarilla_1.png" class="ficha-juego" style="top: 19.8%; left: 62.4%;">
+        <img src="imagen/amarilla_2.png" class="ficha-juego" style="top: 19.8%; left: 74.4%;">
+        <img src="imagen/amarilla_3.png" class="ficha-juego" style="top: 31.8%; left: 62.4%;">
+        <img src="imagen/amarilla_4.png" class="ficha-juego" style="top: 31.8%; left: 74.4%;">
 
-        <img src="imagen/roja_1.png" class="ficha" id="r1" style="top: 62.4%; left: 19.8%;">
-        <img src="imagen/roja_2.png" class="ficha" id="r2" style="top: 62.4%; left: 31.8%;">
-        <img src="imagen/roja_3.png" class="ficha" id="r3" style="top: 74.4%; left: 19.8%;">
-        <img src="imagen/roja_4.png" class="ficha" id="r4" style="top: 74.4%; left: 31.8%;">
+        <img src="imagen/roja_1.png" class="ficha-juego" style="top: 62.4%; left: 19.8%;">
+        <img src="imagen/roja_2.png" class="ficha-juego" style="top: 62.4%; left: 31.8%;">
+        <img src="imagen/roja_3.png" class="ficha-juego" style="top: 74.4%; left: 19.8%;">
+        <img src="imagen/roja_4.png" class="ficha-juego" style="top: 74.4%; left: 31.8%;">
 
-        <img src="imagen/azul_1.png" class="ficha" id="az1" style="top: 62.4%; left: 62.4%;">
-        <img src="imagen/azul_2.png" class="ficha" id="az2" style="top: 62.4%; left: 74.4%;">
-        <img src="imagen/azul_3.png" class="ficha" id="az3" style="top: 74.4%; left: 62.4%;">
-        <img src="imagen/azul_4.png" class="ficha" id="az4" style="top: 74.4%; left: 74.4%;">
+        <img src="imagen/azul_1.png" class="ficha-juego" style="top: 62.4%; left: 62.4%;">
+        <img src="imagen/azul_2.png" class="ficha-juego" style="top: 62.4%; left: 74.4%;">
+        <img src="imagen/azul_3.png" class="ficha-juego" style="top: 74.4%; left: 62.4%;">
+        <img src="imagen/azul_4.png" class="ficha-juego" style="top: 74.4%; left: 74.4%;">
+    </div>
+
+    <div id="panel-datos">
+        <p>Coordenadas obtenidas:</p>
+        <textarea id="listaCoordenadas" readonly></textarea>
+        <button onclick="limpiar()" style="margin-top:10px;">Limpiar</button>
     </div>
 
     <script>
-        const mapas = {
-            rojo: [], azul: [], verde: [], amarillo: [] // Aquí agregarás tus listas
-        };
+        const lista = document.getElementById('listaCoordenadas');
+
+        document.getElementById('contenedor-tablero').addEventListener('click', (e) => {
+            let rect = e.target.getBoundingClientRect();
+            let x = ((e.clientX - rect.left) / rect.width) * 100;
+            let y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            let coord = `[${y.toFixed(1)}, ${x.toFixed(1)}], `;
+            lista.value += coord;
+        });
+
+        function limpiar() { lista.value = ""; }
     </script>
 </body>
 </html>
