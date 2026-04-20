@@ -12,6 +12,7 @@
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
         .meta-contador { position: absolute; color: white; font-weight: bold; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%; pointer-events: none; z-index: 20; font-size: 14px; }
+        .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; }
     </style>
 </head>
 <body>
@@ -23,17 +24,16 @@
         <div id="indicador-turno">Turno: Verde</div>
         <img id="dado-img" src="" alt="Dado">
         <br>
-        <button id="btn-lanzar" onclick="lanzarDado()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Lanzar Dado</button>
+        <button id="btn-lanzar" class="btn" onclick="lanzarDado()">Lanzar Dado</button>
+        <button id="btn-reiniciar" class="btn" onclick="reiniciarJuego()" style="background-color: #e74c3c; color: white; border: none;">Reiniciar Partida</button>
     </div>
 
     <script>
-        const imagenes = [];
-        for(let i=1; i<=6; i++) { imagenes[i] = new Image(); imagenes[i].src = `imagen/dado_${i}.png`; }
-
         let turno = 0; 
         let valorDado = 0;
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
+        let clasificacion = JSON.parse(localStorage.getItem('clasificacion')) || [];
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -49,13 +49,19 @@
         let estadoFichas = {};
         codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
-        // Función para controlar qué fichas responden al clic
+        function reiniciarJuego() {
+            if (confirm("¿Seguro que deseas reiniciar la partida?")) {
+                localStorage.removeItem('clasificacion');
+                location.reload();
+            }
+        }
+
         function actualizarEventosClic() {
             codigosColor.forEach(c => {
                 for (let i = 0; i < 4; i++) {
                     const ficha = document.getElementById(`${c}-${i}`);
                     if (ficha) {
-                        ficha.style.pointerEvents = (c === codigosColor[turno]) ? 'auto' : 'none';
+                        ficha.style.pointerEvents = (c === codigosColor[turno] && fichasEnMeta[c] < 4) ? 'auto' : 'none';
                     }
                 }
             });
@@ -77,7 +83,7 @@
             });
         }
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
-        actualizarEventosClic(); // Inicializamos eventos
+        actualizarEventosClic();
 
         function verificarCaptura(colorJugador, posActual) {
             if (posActual === 4) return;
@@ -122,12 +128,20 @@
         }
 
         function pasarTurno() {
+            if (clasificacion.length >= 3) return; 
+
             valorDado = 0;
             document.getElementById('dado-img').style.display = 'none';
             document.getElementById('btn-lanzar').disabled = false;
-            turno = (turno + 1) % 4;
+
+            let turnosBuscados = 0;
+            do {
+                turno = (turno + 1) % 4;
+                turnosBuscados++;
+            } while (fichasEnMeta[codigosColor[turno]] === 4 && turnosBuscados < 4);
+
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
-            actualizarEventosClic(); // Actualizamos eventos al cambiar turno
+            actualizarEventosClic();
         }
 
         function realizarMovimiento(color, i) {
@@ -158,6 +172,12 @@
                     document.getElementById('contenedor-tablero').appendChild(metaDisplay);
                 }
                 metaDisplay.innerText = fichasEnMeta[color];
+                
+                if (fichasEnMeta[color] === 4 && !clasificacion.includes(color)) {
+                    clasificacion.push(color);
+                    localStorage.setItem('clasificacion', JSON.stringify(clasificacion));
+                    alert(`¡${colores[codigosColor.indexOf(color)]} ha terminado en ${clasificacion.length}º lugar!`);
+                }
             } else {
                 estadoFichas[color][i] = nuevaPos;
                 const ficha = document.getElementById(`${color}-${i}`);
