@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor de Movimiento</title>
+    <title>Ludo Family: Motor con Convoyes Manuales</title>
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
         #contenedor-tablero { position: relative; width: 90vmin; height: 90vmin; }
@@ -34,6 +34,7 @@
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = JSON.parse(localStorage.getItem('clasificacion')) || [];
+        let grupos = {}; // Estructura: {'color-pos': [id1, id2]}
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -92,13 +93,11 @@
             codigosColor.forEach(c => {
                 if (c === colorJugador) return;
                 estadoFichas[c].forEach((p, idx) => {
-                    if (p === -1 || p === 4) return;
-                    let pEnemigo = rutas[c][p];
-                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
+                    if (p === posActual) {
                         estadoFichas[c][idx] = -1;
-                        const fichaDefensora = document.getElementById(`${c}-${idx}`);
-                        fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%";
-                        fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
+                        const ficha = document.getElementById(`${c}-${idx}`);
+                        ficha.style.top = ficha.dataset.baseX + "%";
+                        ficha.style.left = ficha.dataset.baseY + "%";
                     }
                 });
             });
@@ -129,62 +128,76 @@
 
         function pasarTurno() {
             if (clasificacion.length >= 3) return; 
-
             valorDado = 0;
             document.getElementById('dado-img').style.display = 'none';
             document.getElementById('btn-lanzar').disabled = false;
-
             let turnosBuscados = 0;
             do {
                 turno = (turno + 1) % 4;
                 turnosBuscados++;
             } while (fichasEnMeta[codigosColor[turno]] === 4 && turnosBuscados < 4);
-
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
             actualizarEventosClic();
         }
 
         function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
+            
             let posActual = estadoFichas[color][i];
+            let fichasEnMismaPos = [];
+            estadoFichas[color].forEach((p, idx) => { if(p === posActual) fichasEnMismaPos.push(idx); });
+
+            let moverConvoy = false;
+            if (fichasEnMismaPos.length > 1) {
+                moverConvoy = confirm("¿Deseas mover todo el convoy?");
+            }
+
+            let fichasAMover = moverConvoy ? fichasEnMismaPos : [i];
             let totalCasillas = rutas[color].length;
-            let nuevaPos;
-            if (posActual === -1) {
-                if (valorDado === 6 || valorDado === 1) nuevaPos = configSalida[color];
-                else return;
-            } else {
-                nuevaPos = posActual + valorDado;
-            }
-            if (nuevaPos >= totalCasillas) {
-                let exceso = nuevaPos - (totalCasillas - 1);
-                nuevaPos = (totalCasillas - 1) - exceso;
-            }
-            if (nuevaPos === totalCasillas - 1) {
-                fichasEnMeta[color]++;
-                document.getElementById(`${color}-${i}`).style.display = 'none';
-                let metaDisplay = document.getElementById(`meta-${color}`);
-                if (!metaDisplay) {
-                    metaDisplay = document.createElement('div');
-                    metaDisplay.id = `meta-${color}`;
-                    metaDisplay.className = 'meta-contador';
-                    metaDisplay.style.top = rutas[color][totalCasillas - 1][0] + "%";
-                    metaDisplay.style.left = rutas[color][totalCasillas - 1][1] + "%";
-                    document.getElementById('contenedor-tablero').appendChild(metaDisplay);
+
+            fichasAMover.forEach(idx => {
+                let p = estadoFichas[color][idx];
+                let nuevaPos;
+                if (p === -1) {
+                    if (valorDado === 6 || valorDado === 1) nuevaPos = configSalida[color];
+                    else return;
+                } else {
+                    nuevaPos = p + valorDado;
                 }
-                metaDisplay.innerText = fichasEnMeta[color];
-                
-                if (fichasEnMeta[color] === 4 && !clasificacion.includes(color)) {
-                    clasificacion.push(color);
-                    localStorage.setItem('clasificacion', JSON.stringify(clasificacion));
-                    alert(`¡${colores[codigosColor.indexOf(color)]} ha terminado en ${clasificacion.length}º lugar!`);
+
+                if (nuevaPos >= totalCasillas) {
+                    let exceso = nuevaPos - (totalCasillas - 1);
+                    nuevaPos = (totalCasillas - 1) - exceso;
                 }
-            } else {
-                estadoFichas[color][i] = nuevaPos;
-                const ficha = document.getElementById(`${color}-${i}`);
-                ficha.style.top = rutas[color][nuevaPos][0] + "%";
-                ficha.style.left = rutas[color][nuevaPos][1] + "%";
-                verificarCaptura(color, nuevaPos);
-            }
+
+                if (nuevaPos === totalCasillas - 1) {
+                    fichasEnMeta[color]++;
+                    document.getElementById(`${color}-${idx}`).style.display = 'none';
+                    let metaDisplay = document.getElementById(`meta-${color}`);
+                    if (!metaDisplay) {
+                        metaDisplay = document.createElement('div');
+                        metaDisplay.id = `meta-${color}`;
+                        metaDisplay.className = 'meta-contador';
+                        metaDisplay.style.top = rutas[color][totalCasillas - 1][0] + "%";
+                        metaDisplay.style.left = rutas[color][totalCasillas - 1][1] + "%";
+                        document.getElementById('contenedor-tablero').appendChild(metaDisplay);
+                    }
+                    metaDisplay.innerText = fichasEnMeta[color];
+                    if (fichasEnMeta[color] === 4 && !clasificacion.includes(color)) {
+                        clasificacion.push(color);
+                        localStorage.setItem('clasificacion', JSON.stringify(clasificacion));
+                        alert(`¡${colores[codigosColor.indexOf(color)]} ha terminado en ${clasificacion.length}º lugar!`);
+                    }
+                } else {
+                    estadoFichas[color][idx] = nuevaPos;
+                    const ficha = document.getElementById(`${color}-${idx}`);
+                    ficha.style.top = rutas[color][nuevaPos][0] + "%";
+                    ficha.style.left = rutas[color][nuevaPos][1] + "%";
+                }
+            });
+
+            verificarCaptura(color, estadoFichas[color][i]);
+
             if (valorDado !== 1 && valorDado !== 6) {
                 pasarTurno();
             } else {
