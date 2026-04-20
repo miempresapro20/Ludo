@@ -48,9 +48,6 @@
         let valorDado = 0;
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
-        
-        // Define aquí los índices de los 4 puntos seguros (estrellas)
-        const puntosSeguros = [4, 17, 30, 43]; 
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -102,34 +99,6 @@
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
         }
 
-        function verificarCaptura(color, indice) {
-            let posActual = estadoFichas[color][indice];
-            // Si es punto seguro o base, no hay captura
-            if (posActual === -1 || puntosSeguros.includes(posActual)) return;
-
-            let coordFicha = rutas[color][posActual];
-
-            // Escanear otras fichas
-            codigosColor.forEach(cOponente => {
-                if (cOponente === color) return;
-                estadoFichas[cOponente].forEach((posOponente, iOponente) => {
-                    if (posOponente === -1) return;
-                    let coordOponente = rutas[cOponente][posOponente];
-                    
-                    // Cálculo de distancia con tolerancia de 2.0%
-                    let distancia = Math.sqrt(Math.pow(coordFicha[0]-coordOponente[0], 2) + Math.pow(coordFicha[1]-coordOponente[1], 2));
-                    if (distancia < 2.0) {
-                        // Captura! Regresar a base
-                        estadoFichas[cOponente][iOponente] = -1;
-                        let fichaOponente = document.getElementById(`${cOponente}-${iOponente}`);
-                        let baseCoord = rutas[cOponente].slice(0, 4)[iOponente];
-                        fichaOponente.style.top = baseCoord[0] + "%";
-                        fichaOponente.style.left = baseCoord[1] + "%";
-                    }
-                });
-            });
-        }
-
         function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
 
@@ -152,13 +121,49 @@
             if (nuevaPos === totalCasillas - 1) {
                 fichasEnMeta[color]++;
                 document.getElementById(`${color}-${i}`).style.display = 'none';
+                // ... (lógica de contador meta)
+            } else {
+                // LÓGICA DE COLISIÓN Y ZONAS SEGURAS
+                if (nuevaPos !== 4) { // 4 es el punto seguro
+                    verificarCaptura(color, nuevaPos);
+                }
                 
-                let metaDisplay = document.getElementById(`meta-${color}`);
-                if (!metaDisplay) {
-                    metaDisplay = document.createElement('div');
-                    metaDisplay.id = `meta-${color}`;
-                    metaDisplay.className = 'meta-contador';
-                    metaDisplay.style.top = rutas[color][totalCasillas - 1][0] + "%";
+                estadoFichas[color][i] = nuevaPos;
+                const ficha = document.getElementById(`${color}-${i}`);
+                ficha.style.top = rutas[color][nuevaPos][0] + "%";
+                ficha.style.left = rutas[color][nuevaPos][1] + "%";
+            }
+
+            if (valorDado !== 1 && valorDado !== 6) pasarTurno();
+            valorDado = 0;
+            document.getElementById('dado-img').style.display = 'none';
+        }
+
+        function verificarCaptura(colorJugador, pos) {
+            codigosColor.forEach(cOponente => {
+                if (cOponente !== colorJugador) {
+                    estadoFichas[cOponente].forEach((posOponente, iOponente) => {
+                        // Comparar coordenadas (tolerancia visual)
+                        const coordFicha = rutas[colorJugador][pos];
+                        const coordOponente = rutas[cOponente][posOponente];
+                        
+                        if (coordOponente && Math.abs(coordFicha[0] - coordOponente[0]) < 1 && Math.abs(coordFicha[1] - coordOponente[1]) < 1) {
+                            // Captura: regresar oponente a base
+                            estadoFichas[cOponente][iOponente] = -1;
+                            const fichaOponente = document.getElementById(`${cOponente}-${iOponente}`);
+                            const coordsBase = [ /* Definir aquí las coordenadas base si es necesario */ ]; 
+                            // Como no tenemos las coords de base en el objeto rutas, reseteamos posición visual inicial
+                            fichaOponente.style.top = "90%"; // Ajustar según diseño de base
+                            fichaOponente.style.left = "90%";
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+s[color][totalCasillas - 1][0] + "%";
                     metaDisplay.style.left = rutas[color][totalCasillas - 1][1] + "%";
                     document.getElementById('contenedor-tablero').appendChild(metaDisplay);
                 }
