@@ -21,7 +21,6 @@
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
         
-        /* Estilo para el contador de fichas en meta */
         .meta-contador {
             position: absolute; color: white; font-weight: bold; 
             background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%;
@@ -49,6 +48,9 @@
         let valorDado = 0;
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
+        
+        // Define aquí los índices de los 4 puntos seguros (estrellas)
+        const puntosSeguros = [4, 17, 30, 43]; 
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -100,6 +102,34 @@
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
         }
 
+        function verificarCaptura(color, indice) {
+            let posActual = estadoFichas[color][indice];
+            // Si es punto seguro o base, no hay captura
+            if (posActual === -1 || puntosSeguros.includes(posActual)) return;
+
+            let coordFicha = rutas[color][posActual];
+
+            // Escanear otras fichas
+            codigosColor.forEach(cOponente => {
+                if (cOponente === color) return;
+                estadoFichas[cOponente].forEach((posOponente, iOponente) => {
+                    if (posOponente === -1) return;
+                    let coordOponente = rutas[cOponente][posOponente];
+                    
+                    // Cálculo de distancia con tolerancia de 2.0%
+                    let distancia = Math.sqrt(Math.pow(coordFicha[0]-coordOponente[0], 2) + Math.pow(coordFicha[1]-coordOponente[1], 2));
+                    if (distancia < 2.0) {
+                        // Captura! Regresar a base
+                        estadoFichas[cOponente][iOponente] = -1;
+                        let fichaOponente = document.getElementById(`${cOponente}-${iOponente}`);
+                        let baseCoord = rutas[cOponente].slice(0, 4)[iOponente];
+                        fichaOponente.style.top = baseCoord[0] + "%";
+                        fichaOponente.style.left = baseCoord[1] + "%";
+                    }
+                });
+            });
+        }
+
         function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
 
@@ -114,13 +144,11 @@
                 nuevaPos = posActual + valorDado;
             }
 
-            // Lógica de rebote: si se pasa de la última posición
             if (nuevaPos >= totalCasillas) {
                 let exceso = nuevaPos - (totalCasillas - 1);
                 nuevaPos = (totalCasillas - 1) - exceso;
             }
 
-            // Verificar si llega a la meta
             if (nuevaPos === totalCasillas - 1) {
                 fichasEnMeta[color]++;
                 document.getElementById(`${color}-${i}`).style.display = 'none';
@@ -140,6 +168,8 @@
                 const ficha = document.getElementById(`${color}-${i}`);
                 ficha.style.top = rutas[color][nuevaPos][0] + "%";
                 ficha.style.left = rutas[color][nuevaPos][1] + "%";
+                
+                verificarCaptura(color, i);
             }
 
             if (valorDado !== 1 && valorDado !== 6) pasarTurno();
