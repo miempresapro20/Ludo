@@ -34,7 +34,7 @@
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = JSON.parse(localStorage.getItem('clasificacion')) || [];
-        let grupos = {}; // Estructura: {'color-pos': ['color-i', 'color-j']}
+        let grupos = {}; 
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -100,8 +100,6 @@
                         const fichaDefensora = document.getElementById(`${c}-${idx}`);
                         fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%";
                         fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
-                        
-                        // Si era parte de un grupo, desanclar
                         Object.keys(grupos).forEach(key => {
                             if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key];
                         });
@@ -150,7 +148,6 @@
         function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
             
-            // Ver si es parte de un grupo
             let grupoKey = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
             let fichasAMover = grupoKey ? grupos[grupoKey] : [`${color}-${i}`];
             
@@ -173,7 +170,6 @@
             if (nuevaPos === totalCasillas - 1) {
                 fichasEnMeta[color]++;
                 document.getElementById(`${color}-${i}`).style.display = 'none';
-                // ... (Logica de meta igual)
                 let metaDisplay = document.getElementById(`meta-${color}`);
                 if (!metaDisplay) {
                     metaDisplay = document.createElement('div');
@@ -191,7 +187,6 @@
                     alert(`¡${colores[codigosColor.indexOf(color)]} ha terminado en ${clasificacion.length}º lugar!`);
                 }
             } else {
-                // Mover todas las del grupo
                 fichasAMover.forEach(id => {
                     let [c, idx] = id.split('-');
                     estadoFichas[c][idx] = nuevaPos;
@@ -200,11 +195,19 @@
                     ficha.style.left = rutas[c][nuevaPos][1] + "%";
                 });
                 
-                // Verificar si crear nuevo grupo (solo piezas del mismo color)
+                // Lógica de apilamiento: Automático en recorrido, manual en salida (pos 5)
                 let enDestino = [];
                 estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos) enDestino.push(`${color}-${idx}`); });
+                
                 if (enDestino.length > 1) {
-                    grupos[`${color}-${nuevaPos}`] = enDestino;
+                    if (nuevaPos === configSalida[color]) {
+                        if (confirm("¿Deseas apilar tus fichas en la salida?")) {
+                            grupos[`${color}-${nuevaPos}`] = enDestino;
+                        }
+                    } else {
+                        // Automático en el recorrido
+                        grupos[`${color}-${nuevaPos}`] = enDestino;
+                    }
                 }
                 
                 verificarCaptura(color, nuevaPos);
