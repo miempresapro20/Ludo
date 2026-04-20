@@ -12,11 +12,14 @@
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
         .meta-contador { position: absolute; color: white; font-weight: bold; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%; pointer-events: none; z-index: 20; font-size: 14px; }
+        /* Estilos de la ventana emergente */
+        #selector-fichas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 20px; border-radius: 10px; z-index: 100; display: flex; gap: 10px; border: 2px solid white; }
+        .btn-select { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; border: 2px solid white; }
     </style>
 </head>
 <body>
     <h1>Ludo Family</h1>
-    <div id="contenedor-tablero">
+    <div id="contenedor-tablero" onclick="gestionarSeleccion(event)">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
     </div>
     <div id="area-juego">
@@ -57,32 +60,57 @@
                 ficha.style.backgroundColor = color;
                 ficha.style.top = coord[0] + "%";
                 ficha.style.left = coord[1] + "%";
-                // Guardamos posición original para el regreso tras captura
                 ficha.dataset.baseX = coord[0];
                 ficha.dataset.baseY = coord[1];
                 ficha.id = `${color}-${i}`;
-                ficha.onclick = () => realizarMovimiento(color, i);
                 contenedor.appendChild(ficha);
             });
         }
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
 
-        function verificarCaptura(colorJugador, posActual) {
-            // Regla: La posición 4 (quinta coordenada) es segura
-            if (posActual === 4) return;
+        function gestionarSeleccion(e) {
+            const rect = document.getElementById('contenedor-tablero').getBoundingClientRect();
+            const clickX = ((e.clientX - rect.left) / rect.width) * 100;
+            const clickY = ((e.clientY - rect.top) / rect.height) * 100;
+            const margen = 3.0; 
 
+            let candidatas = [];
+            codigosColor.forEach(c => {
+                estadoFichas[c].forEach((p, i) => {
+                    if (p === -1) return;
+                    const posFicha = rutas[c][p];
+                    if (Math.abs(posFicha[0] - clickY) < margen && Math.abs(posFicha[1] - clickX) < margen) {
+                        candidatas.push({color: c, index: i});
+                    }
+                });
+            });
+
+            if (candidatas.length > 1) {
+                const selector = document.createElement('div');
+                selector.id = 'selector-fichas';
+                candidatas.forEach(cand => {
+                    const btn = document.createElement('div');
+                    btn.className = 'btn-select';
+                    btn.style.backgroundColor = cand.color;
+                    btn.onclick = () => { realizarMovimiento(cand.color, cand.index); selector.remove(); };
+                    selector.appendChild(btn);
+                });
+                document.body.appendChild(selector);
+            } else if (candidatas.length === 1) {
+                realizarMovimiento(candidatas[0].color, candidatas[0].index);
+            }
+        }
+
+        function verificarCaptura(colorJugador, posActual) {
+            if (posActual === 4) return;
             const margen = 2.0; 
             const posCoords = rutas[colorJugador][posActual];
-
             codigosColor.forEach(c => {
                 if (c === colorJugador) return;
                 estadoFichas[c].forEach((p, idx) => {
-                    // Regla: No capturar si ficha enemiga está en posición segura 4
                     if (p === -1 || p === 4) return;
-                    
                     let pEnemigo = rutas[c][p];
                     if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
-                        // Capturado
                         estadoFichas[c][idx] = -1;
                         const fichaDefensora = document.getElementById(`${c}-${idx}`);
                         fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%";
@@ -97,7 +125,6 @@
             valorDado = Math.floor(Math.random() * 6) + 1;
             document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
             document.getElementById('dado-img').style.display = 'inline-block';
-
             if (todasEnBase) {
                 if (valorDado === 6 || valorDado === 1) {
                     intentosSalida = 0;
@@ -126,23 +153,19 @@
 
         function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
-
             let posActual = estadoFichas[color][i];
             let totalCasillas = rutas[color].length;
             let nuevaPos;
-
             if (posActual === -1) {
                 if (valorDado === 6 || valorDado === 1) nuevaPos = configSalida[color];
                 else return;
             } else {
                 nuevaPos = posActual + valorDado;
             }
-
             if (nuevaPos >= totalCasillas) {
                 let exceso = nuevaPos - (totalCasillas - 1);
                 nuevaPos = (totalCasillas - 1) - exceso;
             }
-
             if (nuevaPos === totalCasillas - 1) {
                 fichasEnMeta[color]++;
                 document.getElementById(`${color}-${i}`).style.display = 'none';
@@ -163,7 +186,6 @@
                 ficha.style.left = rutas[color][nuevaPos][1] + "%";
                 verificarCaptura(color, nuevaPos);
             }
-
             if (valorDado !== 1 && valorDado !== 6) {
                 pasarTurno();
             } else {
