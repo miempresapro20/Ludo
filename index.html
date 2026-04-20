@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor con Convoyes Manuales</title>
+    <title>Ludo Family: Motor con Convoyes</title>
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
         #contenedor-tablero { position: relative; width: 90vmin; height: 90vmin; }
@@ -34,7 +34,7 @@
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = JSON.parse(localStorage.getItem('clasificacion')) || [];
-        let grupos = {}; // Estructura: {'color-pos': [id1, id2]}
+        let grupos = {}; // { 'color-pos': [ids] }
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -50,20 +50,13 @@
         let estadoFichas = {};
         codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
-        function reiniciarJuego() {
-            if (confirm("¿Seguro que deseas reiniciar la partida?")) {
-                localStorage.removeItem('clasificacion');
-                location.reload();
-            }
-        }
+        function reiniciarJuego() { if (confirm("¿Reiniciar?")) { localStorage.removeItem('clasificacion'); location.reload(); } }
 
         function actualizarEventosClic() {
             codigosColor.forEach(c => {
                 for (let i = 0; i < 4; i++) {
                     const ficha = document.getElementById(`${c}-${i}`);
-                    if (ficha) {
-                        ficha.style.pointerEvents = (c === codigosColor[turno] && fichasEnMeta[c] < 4) ? 'auto' : 'none';
-                    }
+                    if (ficha) ficha.style.pointerEvents = (c === codigosColor[turno] && fichasEnMeta[c] < 4) ? 'auto' : 'none';
                 }
             });
         }
@@ -86,125 +79,81 @@
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
         actualizarEventosClic();
 
-        function verificarCaptura(colorJugador, posActual) {
-            if (posActual === 4) return;
-            const margen = 2.0; 
-            const posCoords = rutas[colorJugador][posActual];
+        function verificarCaptura(colorJugador, pos) {
+            if (pos === 4) return;
             codigosColor.forEach(c => {
                 if (c === colorJugador) return;
                 estadoFichas[c].forEach((p, idx) => {
-                    if (p === posActual) {
+                    if (p === pos) {
                         estadoFichas[c][idx] = -1;
-                        const ficha = document.getElementById(`${c}-${idx}`);
-                        ficha.style.top = ficha.dataset.baseX + "%";
-                        ficha.style.left = ficha.dataset.baseY + "%";
+                        // Si era un convoy, se rompe y regresa todo
+                        delete grupos[`${c}-${pos}`];
+                        const f = document.getElementById(`${c}-${idx}`);
+                        f.style.top = f.dataset.baseX + "%";
+                        f.style.left = f.dataset.baseY + "%";
                     }
                 });
             });
         }
 
         function lanzarDado() {
-            let todasEnBase = estadoFichas[codigosColor[turno]].every(pos => pos === -1);
             valorDado = Math.floor(Math.random() * 6) + 1;
             document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
             document.getElementById('dado-img').style.display = 'inline-block';
-            if (todasEnBase) {
-                if (valorDado === 6 || valorDado === 1) {
-                    intentosSalida = 0;
-                    document.getElementById('btn-lanzar').disabled = false;
-                } else {
-                    intentosSalida++;
-                    if (intentosSalida >= 3) {
-                        intentosSalida = 0;
-                        setTimeout(() => { document.getElementById('btn-lanzar').disabled = false; pasarTurno(); }, 1000);
-                    } else {
-                        setTimeout(() => { document.getElementById('btn-lanzar').disabled = false; }, 1000);
-                    }
-                }
-            } else {
-                document.getElementById('btn-lanzar').disabled = true;
-            }
+            document.getElementById('btn-lanzar').disabled = true;
         }
 
         function pasarTurno() {
-            if (clasificacion.length >= 3) return; 
             valorDado = 0;
             document.getElementById('dado-img').style.display = 'none';
             document.getElementById('btn-lanzar').disabled = false;
-            let turnosBuscados = 0;
-            do {
-                turno = (turno + 1) % 4;
-                turnosBuscados++;
-            } while (fichasEnMeta[codigosColor[turno]] === 4 && turnosBuscados < 4);
+            turno = (turno + 1) % 4;
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
             actualizarEventosClic();
         }
 
         function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
-            
-            let posActual = estadoFichas[color][i];
-            let fichasEnMismaPos = [];
-            estadoFichas[color].forEach((p, idx) => { if(p === posActual) fichasEnMismaPos.push(idx); });
 
-            let moverConvoy = false;
-            if (fichasEnMismaPos.length > 1) {
-                moverConvoy = confirm("¿Deseas mover todo el convoy?");
+            let posActual = estadoFichas[color][i];
+            
+            // Buscar si esta ficha pertenece a un convoy ya formado
+            let grupoClave = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
+            let fichasAMover = grupoClave ? grupos[grupoClave] : [`${color}-${i}`];
+
+            let nuevaPos;
+            if (posActual === -1) {
+                if (valorDado !== 6 && valorDado !== 1) return;
+                nuevaPos = configSalida[color];
+            } else {
+                nuevaPos = posActual + valorDado;
             }
 
-            let fichasAMover = moverConvoy ? fichasEnMismaPos : [i];
-            let totalCasillas = rutas[color].length;
+            if (nuevaPos >= rutas[color].length) {
+                // Simplificación: rebote simple si no llega exacto
+                pasarTurno(); return;
+            }
 
-            fichasAMover.forEach(idx => {
-                let p = estadoFichas[color][idx];
-                let nuevaPos;
-                if (p === -1) {
-                    if (valorDado === 6 || valorDado === 1) nuevaPos = configSalida[color];
-                    else return;
-                } else {
-                    nuevaPos = p + valorDado;
-                }
-
-                if (nuevaPos >= totalCasillas) {
-                    let exceso = nuevaPos - (totalCasillas - 1);
-                    nuevaPos = (totalCasillas - 1) - exceso;
-                }
-
-                if (nuevaPos === totalCasillas - 1) {
-                    fichasEnMeta[color]++;
-                    document.getElementById(`${color}-${idx}`).style.display = 'none';
-                    let metaDisplay = document.getElementById(`meta-${color}`);
-                    if (!metaDisplay) {
-                        metaDisplay = document.createElement('div');
-                        metaDisplay.id = `meta-${color}`;
-                        metaDisplay.className = 'meta-contador';
-                        metaDisplay.style.top = rutas[color][totalCasillas - 1][0] + "%";
-                        metaDisplay.style.left = rutas[color][totalCasillas - 1][1] + "%";
-                        document.getElementById('contenedor-tablero').appendChild(metaDisplay);
-                    }
-                    metaDisplay.innerText = fichasEnMeta[color];
-                    if (fichasEnMeta[color] === 4 && !clasificacion.includes(color)) {
-                        clasificacion.push(color);
-                        localStorage.setItem('clasificacion', JSON.stringify(clasificacion));
-                        alert(`¡${colores[codigosColor.indexOf(color)]} ha terminado en ${clasificacion.length}º lugar!`);
-                    }
-                } else {
-                    estadoFichas[color][idx] = nuevaPos;
-                    const ficha = document.getElementById(`${color}-${idx}`);
-                    ficha.style.top = rutas[color][nuevaPos][0] + "%";
-                    ficha.style.left = rutas[color][nuevaPos][1] + "%";
-                }
+            // Ejecutar movimiento
+            fichasAMover.forEach(idFicha => {
+                let [c, idx] = idFicha.split('-');
+                estadoFichas[c][idx] = nuevaPos;
+                const f = document.getElementById(idFicha);
+                f.style.top = rutas[c][nuevaPos][0] + "%";
+                f.style.left = rutas[c][nuevaPos][1] + "%";
             });
 
-            verificarCaptura(color, estadoFichas[color][i]);
-
-            if (valorDado !== 1 && valorDado !== 6) {
-                pasarTurno();
-            } else {
-                valorDado = 0;
-                document.getElementById('dado-img').style.display = 'none';
-                document.getElementById('btn-lanzar').disabled = false;
+            // Verificar si ahora coinciden para preguntar unión
+            let coincidencia = estadoFichas[color].map((p, idx) => p === nuevaPos ? `${color}-${idx}` : null).filter(x => x);
+            if (coincidencia.length > 1 && !grupoClave) {
+                if (confirm("¿Deseas unir estas fichas en un convoy permanente?")) {
+                    grupos[`${color}-${nuevaPos}`] = coincidencia;
+                }
             }
+
+            verificarCaptura(color, nuevaPos);
+            if (valorDado !== 6 && valorDado !== 1) pasarTurno();
+            else { valorDado = 0; document.getElementById('dado-img').style.display = 'none'; document.getElementById('btn-lanzar').disabled = false; }
         }
     </script>
 </body>
