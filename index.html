@@ -12,10 +12,6 @@
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
         .meta-contador { position: absolute; color: white; font-weight: bold; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%; pointer-events: none; z-index: 20; font-size: 14px; }
-        
-        /* Ventana de selección */
-        #selector-fichas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 15px; border-radius: 10px; z-index: 100; display: flex; gap: 10px; border: 2px solid white; }
-        .btn-select { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; border: 2px solid white; }
     </style>
 </head>
 <body>
@@ -53,6 +49,18 @@
         let estadoFichas = {};
         codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
+        // Función para controlar qué fichas responden al clic
+        function actualizarEventosClic() {
+            codigosColor.forEach(c => {
+                for (let i = 0; i < 4; i++) {
+                    const ficha = document.getElementById(`${c}-${i}`);
+                    if (ficha) {
+                        ficha.style.pointerEvents = (c === codigosColor[turno]) ? 'auto' : 'none';
+                    }
+                }
+            });
+        }
+
         function crearFichasBase(lista, color) {
             const contenedor = document.getElementById('contenedor-tablero');
             lista.slice(0, 4).forEach((coord, i) => {
@@ -64,19 +72,12 @@
                 ficha.dataset.baseX = coord[0];
                 ficha.dataset.baseY = coord[1];
                 ficha.id = `${color}-${i}`;
-                
-                // Función interna que mantiene el comportamiento original
-                ficha.onclick = (e) => {
-                    e.stopPropagation(); // Evita clics no deseados
-                    realizarMovimiento(color, i);
-                };
+                ficha.onclick = () => realizarMovimiento(color, i);
                 contenedor.appendChild(ficha);
             });
         }
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
-
-        // NUEVA FUNCIÓN: Solo se llama desde el HTML si quieres una lógica de selección especial
-        // Pero he mantenido el onclick original en las fichas para no romper tu motor.
+        actualizarEventosClic(); // Inicializamos eventos
 
         function verificarCaptura(colorJugador, posActual) {
             if (posActual === 4) return;
@@ -126,6 +127,7 @@
             document.getElementById('btn-lanzar').disabled = false;
             turno = (turno + 1) % 4;
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
+            actualizarEventosClic(); // Actualizamos eventos al cambiar turno
         }
 
         function realizarMovimiento(color, i) {
