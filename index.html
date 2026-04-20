@@ -5,45 +5,35 @@
     <title>Ludo Family: Motor de Movimiento</title>
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
-        
         #contenedor-tablero { position: relative; width: 90vmin; height: 90vmin; }
         #tablero-img { width: 100%; height: 100%; display: block; }
-
-        .ficha {
-            position: absolute; width: 5%; height: 5%;
-            border-radius: 50%; border: 2px solid white;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5);
-            transform: translate(-50%, -50%); z-index: 10;
-            cursor: pointer; transition: all 0.3s ease;
-        }
-
+        .ficha { position: absolute; width: 5%; height: 5%; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5); transform: translate(-50%, -50%); z-index: 10; cursor: pointer; transition: all 0.3s ease; }
         #area-juego { margin-top: 20px; text-align: center; }
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
-        
-        .meta-contador {
-            position: absolute; color: white; font-weight: bold; 
-            background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%;
-            pointer-events: none; z-index: 20; font-size: 14px;
-        }
+        .meta-contador { position: absolute; color: white; font-weight: bold; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%; pointer-events: none; z-index: 20; font-size: 14px; }
     </style>
 </head>
 <body>
-
     <h1>Ludo Family</h1>
-    
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
     </div>
-
     <div id="area-juego">
         <div id="indicador-turno">Turno: Verde</div>
         <img id="dado-img" src="" alt="Dado">
         <br>
-        <button onclick="lanzarDado()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Lanzar Dado</button>
+        <button id="btn-lanzar" onclick="lanzarDado()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Lanzar Dado</button>
     </div>
 
     <script>
+        // Precarga de imágenes para el caché del navegador
+        const imagenesDado = [];
+        for(let i=1; i<=6; i++) {
+            imagenesDado[i] = new Image();
+            imagenesDado[i].src = `imagen/dado_${i}.png`;
+        }
+
         let turno = 0; 
         let valorDado = 0;
         let intentosSalida = 0;
@@ -76,10 +66,10 @@
                 contenedor.appendChild(ficha);
             });
         }
-
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
 
         function lanzarDado() {
+            document.getElementById('btn-lanzar').disabled = true; // Bloquea botón
             let todasEnBase = estadoFichas[codigosColor[turno]].every(pos => pos === -1);
             valorDado = Math.floor(Math.random() * 6) + 1;
             document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
@@ -95,6 +85,7 @@
         function pasarTurno() {
             valorDado = 0;
             document.getElementById('dado-img').style.display = 'none';
+            document.getElementById('btn-lanzar').disabled = false; // Desbloquea botón
             turno = (turno + 1) % 4;
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
         }
@@ -121,39 +112,36 @@
             if (nuevaPos === totalCasillas - 1) {
                 fichasEnMeta[color]++;
                 document.getElementById(`${color}-${i}`).style.display = 'none';
-                // ... (lógica de contador meta)
-            } else {
-                // LÓGICA DE COLISIÓN Y ZONAS SEGURAS
-                if (nuevaPos !== 4) { // 4 es el punto seguro
-                    verificarCaptura(color, nuevaPos);
+                let metaDisplay = document.getElementById(`meta-${color}`);
+                if (!metaDisplay) {
+                    metaDisplay = document.createElement('div');
+                    metaDisplay.id = `meta-${color}`;
+                    metaDisplay.className = 'meta-contador';
+                    metaDisplay.style.top = rutas[color][totalCasillas - 1][0] + "%";
+                    metaDisplay.style.left = rutas[color][totalCasillas - 1][1] + "%";
+                    document.getElementById('contenedor-tablero').appendChild(metaDisplay);
                 }
-                
+                metaDisplay.innerText = fichasEnMeta[color];
+            } else {
                 estadoFichas[color][i] = nuevaPos;
                 const ficha = document.getElementById(`${color}-${i}`);
                 ficha.style.top = rutas[color][nuevaPos][0] + "%";
                 ficha.style.left = rutas[color][nuevaPos][1] + "%";
             }
 
-            if (valorDado !== 1 && valorDado !== 6) pasarTurno();
-            valorDado = 0;
-            document.getElementById('dado-img').style.display = 'none';
+            // Si sacó 1 o 6, el jugador repite: no pasamos turno, reactivamos botón
+            if (valorDado !== 1 && valorDado !== 6) {
+                pasarTurno();
+            } else {
+                valorDado = 0;
+                document.getElementById('dado-img').style.display = 'none';
+                document.getElementById('btn-lanzar').disabled = false; 
+            }
         }
-
-        function verificarCaptura(colorJugador, pos) {
-            codigosColor.forEach(cOponente => {
-                if (cOponente !== colorJugador) {
-                    estadoFichas[cOponente].forEach((posOponente, iOponente) => {
-                        // Comparar coordenadas (tolerancia visual)
-                        const coordFicha = rutas[colorJugador][pos];
-                        const coordOponente = rutas[cOponente][posOponente];
-                        
-                        if (coordOponente && Math.abs(coordFicha[0] - coordOponente[0]) < 1 && Math.abs(coordFicha[1] - coordOponente[1]) < 1) {
-                            // Captura: regresar oponente a base
-                            estadoFichas[cOponente][iOponente] = -1;
-                            const fichaOponente = document.getElementById(`${cOponente}-${iOponente}`);
-                            const coordsBase = [ /* Definir aquí las coordenadas base si es necesario */ ]; 
-                            // Como no tenemos las coords de base en el objeto rutas, reseteamos posición visual inicial
-                            fichaOponente.style.top = "90%"; // Ajustar según diseño de base
+    </script>
+</body>
+</html>
+o de base
                             fichaOponente.style.left = "90%";
                         }
                     });
