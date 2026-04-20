@@ -20,6 +20,13 @@
         #area-juego { margin-top: 20px; text-align: center; }
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
+        
+        /* Estilo para el contador de fichas en meta */
+        .meta-contador {
+            position: absolute; color: white; font-weight: bold; 
+            background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%;
+            pointer-events: none; z-index: 20; font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -41,9 +48,10 @@
         let turno = 0; 
         let valorDado = 0;
         let intentosSalida = 0;
+        let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
+
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
-        
         const configSalida = { 'green': 4, 'yellow': 4, 'blue': 4, 'red': 4 };
         
         const rutas = {
@@ -73,21 +81,15 @@
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
 
         function lanzarDado() {
-            // Lógica de intentos de salida
             let todasEnBase = estadoFichas[codigosColor[turno]].every(pos => pos === -1);
-            
             valorDado = Math.floor(Math.random() * 6) + 1;
             document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
             document.getElementById('dado-img').style.display = 'inline-block';
 
             if (todasEnBase) {
                 intentosSalida++;
-                if (valorDado === 6 || valorDado === 1) {
-                    intentosSalida = 0; // Salió, reiniciamos intentos
-                } else if (intentosSalida >= 3) {
-                    intentosSalida = 0;
-                    pasarTurno();
-                }
+                if (valorDado === 6 || valorDado === 1) intentosSalida = 0;
+                else if (intentosSalida >= 3) { intentosSalida = 0; pasarTurno(); }
             }
         }
 
@@ -102,30 +104,47 @@
             if (valorDado === 0 || color !== codigosColor[turno]) return;
 
             let posActual = estadoFichas[color][i];
+            let totalCasillas = rutas[color].length;
             let nuevaPos;
 
             if (posActual === -1) {
-                if (valorDado === 6 || valorDado === 1) {
-                    nuevaPos = configSalida[color];
-                } else return;
+                if (valorDado === 6 || valorDado === 1) nuevaPos = configSalida[color];
+                else return;
             } else {
                 nuevaPos = posActual + valorDado;
             }
 
-            if (nuevaPos < rutas[color].length) {
+            // Lógica de rebote: si se pasa de la última posición
+            if (nuevaPos >= totalCasillas) {
+                let exceso = nuevaPos - (totalCasillas - 1);
+                nuevaPos = (totalCasillas - 1) - exceso;
+            }
+
+            // Verificar si llega a la meta
+            if (nuevaPos === totalCasillas - 1) {
+                fichasEnMeta[color]++;
+                document.getElementById(`${color}-${i}`).style.display = 'none';
+                
+                let metaDisplay = document.getElementById(`meta-${color}`);
+                if (!metaDisplay) {
+                    metaDisplay = document.createElement('div');
+                    metaDisplay.id = `meta-${color}`;
+                    metaDisplay.className = 'meta-contador';
+                    metaDisplay.style.top = rutas[color][totalCasillas - 1][0] + "%";
+                    metaDisplay.style.left = rutas[color][totalCasillas - 1][1] + "%";
+                    document.getElementById('contenedor-tablero').appendChild(metaDisplay);
+                }
+                metaDisplay.innerText = fichasEnMeta[color];
+            } else {
                 estadoFichas[color][i] = nuevaPos;
                 const ficha = document.getElementById(`${color}-${i}`);
                 ficha.style.top = rutas[color][nuevaPos][0] + "%";
                 ficha.style.left = rutas[color][nuevaPos][1] + "%";
-                
-                // Si saca 1 o 6, el jugador repite (no pasamos turno)
-                if (valorDado === 1 || valorDado === 6) {
-                    valorDado = 0;
-                    document.getElementById('dado-img').style.display = 'none';
-                } else {
-                    pasarTurno();
-                }
             }
+
+            if (valorDado !== 1 && valorDado !== 6) pasarTurno();
+            valorDado = 0;
+            document.getElementById('dado-img').style.display = 'none';
         }
     </script>
 </body>
