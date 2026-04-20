@@ -141,34 +141,3 @@
     </script>
 </body>
 </html>
-o de base
-                            fichaOponente.style.left = "90%";
-                        }
-                    });
-                }
-            });
-        }
-    </script>
-</body>
-</html>
-s[color][totalCasillas - 1][0] + "%";
-                    metaDisplay.style.left = rutas[color][totalCasillas - 1][1] + "%";
-                    document.getElementById('contenedor-tablero').appendChild(metaDisplay);
-                }
-                metaDisplay.innerText = fichasEnMeta[color];
-            } else {
-                estadoFichas[color][i] = nuevaPos;
-                const ficha = document.getElementById(`${color}-${i}`);
-                ficha.style.top = rutas[color][nuevaPos][0] + "%";
-                ficha.style.left = rutas[color][nuevaPos][1] + "%";
-                
-                verificarCaptura(color, i);
-            }
-
-            if (valorDado !== 1 && valorDado !== 6) pasarTurno();
-            valorDado = 0;
-            document.getElementById('dado-img').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
