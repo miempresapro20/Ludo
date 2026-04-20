@@ -5,20 +5,37 @@
     <title>Ludo Family: Motor de Movimiento</title>
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
+        
         #contenedor-tablero { position: relative; width: 90vmin; height: 90vmin; }
         #tablero-img { width: 100%; height: 100%; display: block; }
-        .ficha { position: absolute; width: 5%; height: 5%; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5); transform: translate(-50%, -50%); z-index: 10; cursor: pointer; transition: all 0.3s ease; }
+
+        .ficha {
+            position: absolute; width: 5%; height: 5%;
+            border-radius: 50%; border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transform: translate(-50%, -50%); z-index: 10;
+            cursor: pointer; transition: all 0.3s ease;
+        }
+
         #area-juego { margin-top: 20px; text-align: center; }
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
-        .meta-contador { position: absolute; color: white; font-weight: bold; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%; pointer-events: none; z-index: 20; font-size: 14px; }
+        
+        .meta-contador {
+            position: absolute; color: white; font-weight: bold; 
+            background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%;
+            pointer-events: none; z-index: 20; font-size: 14px;
+        }
     </style>
 </head>
 <body>
+
     <h1>Ludo Family</h1>
+    
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
     </div>
+
     <div id="area-juego">
         <div id="indicador-turno">Turno: Verde</div>
         <img id="dado-img" src="" alt="Dado">
@@ -27,11 +44,11 @@
     </div>
 
     <script>
-        // Precarga de imágenes para el caché del navegador
-        const imagenesDado = [];
+        // Precarga de imágenes para caché
+        const imagenes = [];
         for(let i=1; i<=6; i++) {
-            imagenesDado[i] = new Image();
-            imagenesDado[i].src = `imagen/dado_${i}.png`;
+            imagenes[i] = new Image();
+            imagenes[i].src = `imagen/dado_${i}.png`;
         }
 
         let turno = 0; 
@@ -69,23 +86,27 @@
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
 
         function lanzarDado() {
-            document.getElementById('btn-lanzar').disabled = true; // Bloquea botón
+            document.getElementById('btn-lanzar').disabled = true;
             let todasEnBase = estadoFichas[codigosColor[turno]].every(pos => pos === -1);
             valorDado = Math.floor(Math.random() * 6) + 1;
             document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
             document.getElementById('dado-img').style.display = 'inline-block';
 
-            if (todasEnBase) {
+            if (todasEnBase && valorDado !== 6 && valorDado !== 1) {
                 intentosSalida++;
-                if (valorDado === 6 || valorDado === 1) intentosSalida = 0;
-                else if (intentosSalida >= 3) { intentosSalida = 0; pasarTurno(); }
+                if (intentosSalida >= 3) {
+                    intentosSalida = 0;
+                    setTimeout(pasarTurno, 1000);
+                } else {
+                    setTimeout(pasarTurno, 1000);
+                }
             }
         }
 
         function pasarTurno() {
             valorDado = 0;
             document.getElementById('dado-img').style.display = 'none';
-            document.getElementById('btn-lanzar').disabled = false; // Desbloquea botón
+            document.getElementById('btn-lanzar').disabled = false;
             turno = (turno + 1) % 4;
             document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
         }
@@ -129,13 +150,12 @@
                 ficha.style.left = rutas[color][nuevaPos][1] + "%";
             }
 
-            // Si sacó 1 o 6, el jugador repite: no pasamos turno, reactivamos botón
             if (valorDado !== 1 && valorDado !== 6) {
                 pasarTurno();
             } else {
                 valorDado = 0;
                 document.getElementById('dado-img').style.display = 'none';
-                document.getElementById('btn-lanzar').disabled = false; 
+                document.getElementById('btn-lanzar').disabled = false;
             }
         }
     </script>
