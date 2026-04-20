@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor con Convoyes</title>
+    <title>Ludo Family: Motor de Movimiento</title>
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
         #contenedor-tablero { position: relative; width: 90vmin; height: 90vmin; }
@@ -12,7 +12,6 @@
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 20px; margin-bottom: 10px; font-weight: bold; }
         .meta-contador { position: absolute; color: white; font-weight: bold; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 50%; pointer-events: none; z-index: 20; font-size: 14px; }
-        .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; }
     </style>
 </head>
 <body>
@@ -24,8 +23,8 @@
         <div id="indicador-turno">Turno: Verde</div>
         <img id="dado-img" src="" alt="Dado">
         <br>
-        <button id="btn-lanzar" class="btn" onclick="lanzarDado()">Lanzar Dado</button>
-        <button id="btn-reiniciar" class="btn" onclick="reiniciarJuego()" style="background-color: #e74c3c; color: white; border: none;">Reiniciar Partida</button>
+        <button id="btn-lanzar" onclick="lanzarDado()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Lanzar Dado</button>
+        <button id="btn-reiniciar" onclick="reiniciarJuego()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #e74c3c; color: white; border: none;">Reiniciar</button>
     </div>
 
     <script>
@@ -34,7 +33,7 @@
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = JSON.parse(localStorage.getItem('clasificacion')) || [];
-        let grupos = {}; // { 'color-pos': [ids] }
+        let grupos = {}; // Estructura: {'color-pos': ['color-i', 'color-j']}
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -50,13 +49,20 @@
         let estadoFichas = {};
         codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
-        function reiniciarJuego() { if (confirm("¿Reiniciar?")) { localStorage.removeItem('clasificacion'); location.reload(); } }
+        function reiniciarJuego() {
+            if (confirm("¿Reiniciar?")) {
+                localStorage.removeItem('clasificacion');
+                location.reload();
+            }
+        }
 
         function actualizarEventosClic() {
             codigosColor.forEach(c => {
                 for (let i = 0; i < 4; i++) {
                     const ficha = document.getElementById(`${c}-${i}`);
-                    if (ficha) ficha.style.pointerEvents = (c === codigosColor[turno] && fichasEnMeta[c] < 4) ? 'auto' : 'none';
+                    if (ficha) {
+                        ficha.style.pointerEvents = (c === codigosColor[turno]) ? 'auto' : 'none';
+                    }
                 }
             });
         }
@@ -79,28 +85,48 @@
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
         actualizarEventosClic();
 
-        function verificarCaptura(colorJugador, pos) {
-            if (pos === 4) return;
+        function verificarCaptura(colorJugador, posActual) {
+            if (posActual === 4) return;
+            const margen = 2.0; 
+            const posCoords = rutas[colorJugador][posActual];
             codigosColor.forEach(c => {
                 if (c === colorJugador) return;
                 estadoFichas[c].forEach((p, idx) => {
-                    if (p === pos) {
+                    if (p === -1 || p === 4) return;
+                    let pEnemigo = rutas[c][p];
+                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
                         estadoFichas[c][idx] = -1;
-                        // Si era un convoy, se rompe y regresa todo
-                        delete grupos[`${c}-${pos}`];
-                        const f = document.getElementById(`${c}-${idx}`);
-                        f.style.top = f.dataset.baseX + "%";
-                        f.style.left = f.dataset.baseY + "%";
+                        const fichaDefensora = document.getElementById(`${c}-${idx}`);
+                        fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%";
+                        fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
+                        // Romper anclaje
+                        Object.keys(grupos).forEach(key => { if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key]; });
                     }
                 });
             });
         }
 
         function lanzarDado() {
+            let todasEnBase = estadoFichas[codigosColor[turno]].every(pos => pos === -1);
             valorDado = Math.floor(Math.random() * 6) + 1;
             document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
             document.getElementById('dado-img').style.display = 'inline-block';
-            document.getElementById('btn-lanzar').disabled = true;
+            if (todasEnBase) {
+                if (valorDado === 6 || valorDado === 1) {
+                    intentosSalida = 0;
+                    document.getElementById('btn-lanzar').disabled = false;
+                } else {
+                    intentosSalida++;
+                    if (intentosSalida >= 3) {
+                        intentosSalida = 0;
+                        setTimeout(() => { document.getElementById('btn-lanzar').disabled = false; pasarTurno(); }, 1000);
+                    } else {
+                        setTimeout(() => { document.getElementById('btn-lanzar').disabled = false; }, 1000);
+                    }
+                }
+            } else {
+                document.getElementById('btn-lanzar').disabled = true;
+            }
         }
 
         function pasarTurno() {
@@ -115,44 +141,45 @@
         function realizarMovimiento(color, i) {
             if (valorDado === 0 || color !== codigosColor[turno]) return;
 
+            let grupoKey = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
+            let fichasAMover = grupoKey ? grupos[grupoKey] : [`${color}-${i}`];
             let posActual = estadoFichas[color][i];
-            
-            // Buscar si esta ficha pertenece a un convoy ya formado
-            let grupoClave = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
-            let fichasAMover = grupoClave ? grupos[grupoClave] : [`${color}-${i}`];
-
+            let totalCasillas = rutas[color].length;
             let nuevaPos;
+
             if (posActual === -1) {
-                if (valorDado !== 6 && valorDado !== 1) return;
-                nuevaPos = configSalida[color];
+                if (valorDado === 6 || valorDado === 1) nuevaPos = configSalida[color];
+                else return;
             } else {
                 nuevaPos = posActual + valorDado;
             }
 
-            if (nuevaPos >= rutas[color].length) {
-                // Simplificación: rebote simple si no llega exacto
-                pasarTurno(); return;
-            }
+            if (nuevaPos >= totalCasillas) nuevaPos = (totalCasillas - 1) - (nuevaPos - (totalCasillas - 1));
 
-            // Ejecutar movimiento
-            fichasAMover.forEach(idFicha => {
-                let [c, idx] = idFicha.split('-');
-                estadoFichas[c][idx] = nuevaPos;
-                const f = document.getElementById(idFicha);
-                f.style.top = rutas[c][nuevaPos][0] + "%";
-                f.style.left = rutas[c][nuevaPos][1] + "%";
-            });
+            if (nuevaPos === totalCasillas - 1) {
+                fichasEnMeta[color]++;
+                document.getElementById(`${color}-${i}`).style.display = 'none';
+            } else {
+                fichasAMover.forEach(id => {
+                    let [c, idx] = id.split('-');
+                    estadoFichas[c][idx] = nuevaPos;
+                    const ficha = document.getElementById(id);
+                    ficha.style.top = rutas[c][nuevaPos][0] + "%";
+                    ficha.style.left = rutas[c][nuevaPos][1] + "%";
+                });
 
-            // Verificar si ahora coinciden para preguntar unión
-            let coincidencia = estadoFichas[color].map((p, idx) => p === nuevaPos ? `${color}-${idx}` : null).filter(x => x);
-            if (coincidencia.length > 1 && !grupoClave) {
-                if (confirm("¿Deseas unir estas fichas en un convoy permanente?")) {
-                    grupos[`${color}-${nuevaPos}`] = coincidencia;
+                let enDestino = [];
+                codigosColor.forEach(c => {
+                    estadoFichas[c].forEach((p, idx) => { if (p === nuevaPos) enDestino.push(`${c}-${idx}`); });
+                });
+                
+                if (enDestino.length > 1 && !grupoKey && confirm("¿Anclar fichas?")) {
+                    grupos[`${color}-${nuevaPos}`] = enDestino;
                 }
+                verificarCaptura(color, nuevaPos);
             }
 
-            verificarCaptura(color, nuevaPos);
-            if (valorDado !== 6 && valorDado !== 1) pasarTurno();
+            if (valorDado !== 1 && valorDado !== 6) pasarTurno();
             else { valorDado = 0; document.getElementById('dado-img').style.display = 'none'; document.getElementById('btn-lanzar').disabled = false; }
         }
     </script>
