@@ -156,7 +156,7 @@
             let nuevaPos;
             
             if (posActual === -1) {
-                if (valorDado === 6 || valorDado === 1) nuevaPos = 4;
+                if (valorDado === 6 || valorDado === 1) nuevaPos = 4; // Salida base
                 else return;
             } else {
                 nuevaPos = posActual + valorDado;
@@ -188,44 +188,35 @@
                     alert(`¡${colores[codigosColor.indexOf(color)]} ha terminado en ${clasificacion.length}º lugar!`);
                 }
             } else {
-                // Función interna para aplicar el movimiento final
-                const aplicarMovimiento = () => {
-                    fichasAMover.forEach(id => {
-                        let [c, idx] = id.split('-');
-                        estadoFichas[c][idx] = nuevaPos;
-                        const ficha = document.getElementById(id);
-                        ficha.style.top = rutas[c][nuevaPos][0] + "%";
-                        ficha.style.left = rutas[c][nuevaPos][1] + "%";
-                    });
-                    
-                    // Buscar fichas en el destino para agrupar
-                    let enDestino = [];
-                    estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos) enDestino.push(`${color}-${idx}`); });
-                    if (enDestino.length > 1) {
-                        grupos[`${color}-${nuevaPos}`] = enDestino;
-                    }
-                    verificarCaptura(color, nuevaPos);
-                };
-
-                // Lógica de apilamiento
-                let hayFichasEnDestino = estadoFichas[color].some((p, idx) => p === nuevaPos && !fichasAMover.includes(`${color}-${idx}`));
-
-                if (hayFichasEnDestino) {
+                // Actualizar posiciones de las fichas seleccionadas
+                fichasAMover.forEach(id => {
+                    let [c, idx] = id.split('-');
+                    estadoFichas[c][idx] = nuevaPos;
+                    const ficha = document.getElementById(id);
+                    ficha.style.top = rutas[c][nuevaPos][0] + "%";
+                    ficha.style.left = rutas[c][nuevaPos][1] + "%";
+                });
+                
+                // Buscar todas las fichas del color en la casilla de destino
+                let enDestino = [];
+                estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos) enDestino.push(`${color}-${idx}`); });
+                
+                if (enDestino.length > 1) {
                     if (nuevaPos === COORDENADA_SALIDA) {
-                        if (confirm("¿Deseas apilar tus fichas en la salida?")) {
-                            aplicarMovimiento();
-                        } else {
-                            // Si dice no, solo movemos la ficha seleccionada (recalculando)
-                            fichasAMover = [`${color}-${i}`];
-                            aplicarMovimiento();
+                        // CASO ESPECIAL: Preguntar solo en la coordenada 5
+                        // Detectamos si el grupo que llegó es distinto al que ya estaba
+                        let piezasNuevas = enDestino.filter(id => !fichasAMover.includes(id));
+                        if (piezasNuevas.length > 0) {
+                            if (confirm("¿Deseas acoplar tus fichas en la salida?")) {
+                                grupos[`${color}-${nuevaPos}`] = enDestino;
+                            }
                         }
                     } else {
-                        // Automático en el recorrido
-                        aplicarMovimiento();
+                        // CASO GENERAL: Acoplamiento automático en el recorrido
+                        grupos[`${color}-${nuevaPos}`] = enDestino;
                     }
-                } else {
-                    aplicarMovimiento();
                 }
+                verificarCaptura(color, nuevaPos);
             }
             
             if (valorDado !== 1 && valorDado !== 6) pasarTurno();
