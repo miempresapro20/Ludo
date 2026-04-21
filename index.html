@@ -38,7 +38,9 @@
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
-        const COORDENADA_SALIDA = 5;
+        
+        // CORRECCIÓN: La posición de salida en tus rutas es el índice 4 (el 5to elemento)
+        const COORDENADA_SALIDA = 4;
 
         const rutas = {
             'red': [[72.0, 28.5], [71.9, 12.2], [87.3, 14.1], [87.8, 29.0], [89.8, 44.1], [83.1, 43.9], [75.8, 44.0], [69.1, 44.1], [63.2, 44.6], [56.3, 37.6], [55.9, 30.6], [56.0, 23.9], [56.1, 17.3], [56.1, 11.0], [56.4, 4.4], [49.9, 4.2], [43.5, 3.7], [43.6, 10.4], [43.3, 18.4], [43.2, 24.4], [43.3, 30.6], [43.6, 38.1], [36.8, 44.3], [29.7, 43.9], [23.1, 44.0], [16.9, 44.1], [10.0, 44.1], [3.5, 44.2], [3.8, 50.8], [3.6, 57.5], [9.7, 57.1], [16.9, 57.9], [24.1, 58.0], [30.0, 57.5], [37.0, 56.8], [43.6, 63.9], [43.6, 70.6], [43.7, 77.0], [43.4, 84.4], [43.7, 90.9], [43.4, 97.1], [49.7, 96.6], [56.5, 96.5], [56.8, 90.6], [56.5, 83.4], [57.5, 76.8], [56.9, 70.2], [56.9, 63.8], [63.8, 56.7], [69.8, 57.0], [76.4, 57.3], [82.4, 57.5], [89.1, 57.1], [96.0, 57.9], [96.2, 50.7], [89.0, 50.7], [83.2, 50.3], [76.4, 50.6], [68.9, 51.0], [62.9, 51.2], [55.9, 51.0]],
@@ -87,7 +89,7 @@
         actualizarEventosClic();
 
         function verificarCaptura(colorJugador, posActual) {
-            if (posActual === 4) return;
+            if (posActual === COORDENADA_SALIDA) return; // Inmunidad en salida
             const margen = 2.0; 
             const posCoords = rutas[colorJugador][posActual];
             codigosColor.forEach(c => {
@@ -156,7 +158,7 @@
             let nuevaPos;
             
             if (posActual === -1) {
-                if (valorDado === 6 || valorDado === 1) nuevaPos = 4; // Salida base
+                if (valorDado === 6 || valorDado === 1) nuevaPos = COORDENADA_SALIDA;
                 else return;
             } else {
                 nuevaPos = posActual + valorDado;
@@ -188,7 +190,7 @@
                     alert(`¡${colores[codigosColor.indexOf(color)]} ha terminado en ${clasificacion.length}º lugar!`);
                 }
             } else {
-                // Actualizar posiciones de las fichas seleccionadas
+                // 1. Mover visualmente
                 fichasAMover.forEach(id => {
                     let [c, idx] = id.split('-');
                     estadoFichas[c][idx] = nuevaPos;
@@ -196,26 +198,31 @@
                     ficha.style.top = rutas[c][nuevaPos][0] + "%";
                     ficha.style.left = rutas[c][nuevaPos][1] + "%";
                 });
-                
-                // Buscar todas las fichas del color en la casilla de destino
-                let enDestino = [];
-                estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos) enDestino.push(`${color}-${idx}`); });
-                
-                if (enDestino.length > 1) {
+
+                // 2. Limpiar grupos previos de estas fichas
+                Object.keys(grupos).forEach(key => {
+                    grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id));
+                    if (grupos[key].length <= 1) delete grupos[key];
+                });
+
+                // 3. Evaluar acoplamiento en destino
+                let todasEnDestino = [];
+                estadoFichas[color].forEach((p, idx) => {
+                    if (p === nuevaPos) todasEnDestino.push(`${color}-${idx}`);
+                });
+
+                if (todasEnDestino.length > 1) {
                     if (nuevaPos === COORDENADA_SALIDA) {
-                        // CASO ESPECIAL: Preguntar solo en la coordenada 5
-                        // Detectamos si el grupo que llegó es distinto al que ya estaba
-                        let piezasNuevas = enDestino.filter(id => !fichasAMover.includes(id));
-                        if (piezasNuevas.length > 0) {
-                            if (confirm("¿Deseas acoplar tus fichas en la salida?")) {
-                                grupos[`${color}-${nuevaPos}`] = enDestino;
-                            }
+                        // PREGUNTA OBLIGATORIA EN SALIDA
+                        if (confirm("¿Deseas acoplar las fichas en la salida?")) {
+                            grupos[`${color}-${nuevaPos}`] = todasEnDestino;
                         }
                     } else {
-                        // CASO GENERAL: Acoplamiento automático en el recorrido
-                        grupos[`${color}-${nuevaPos}`] = enDestino;
+                        // ACOPLAMIENTO AUTOMÁTICO EN EL CAMINO
+                        grupos[`${color}-${nuevaPos}`] = todasEnDestino;
                     }
                 }
+                
                 verificarCaptura(color, nuevaPos);
             }
             
