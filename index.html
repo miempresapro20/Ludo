@@ -50,7 +50,10 @@
     </div>
 
     <div id="area-juego">
-        <div id="indicador-turno" style="background-color: green;">Turno: Verde</div>
+        <div id="indicador-turno" style="background-color: green;">
+            <span id="texto-turno">Turno: Verde</span>
+            <span id="temporizador-ui" style="float: right;">⏱ 30s</span>
+        </div>
         <img id="dado-img" src="" alt="Dado">
         <br>
         <button id="btn-lanzar" class="btn" style="background-color: #27ae60; color: white;" onclick="lanzarDado()">Lanzar Dado</button>
@@ -74,9 +77,44 @@
         let clasificacion = JSON.parse(localStorage.getItem('clasificacion')) || [];
         let grupos = {}; 
 
+        // --- SISTEMA DE TEMPORIZADOR AÑADIDO ---
+        let tiempoRestante = 30;
+        let intervaloTemporizador;
+
+        function actualizarUITemporizador() {
+            const tempUI = document.getElementById('temporizador-ui');
+            if (tempUI) {
+                tempUI.innerText = `⏱ ${tiempoRestante}s`;
+                // Efecto rojo de alerta cuando quedan 5 segundos o menos
+                if (tiempoRestante <= 5) tempUI.style.color = '#ffcccb'; 
+                else tempUI.style.color = 'white';
+            }
+        }
+
+        function iniciarTemporizador() {
+            clearInterval(intervaloTemporizador);
+            tiempoRestante = 30;
+            actualizarUITemporizador();
+            intervaloTemporizador = setInterval(() => {
+                tiempoRestante--;
+                actualizarUITemporizador();
+                if (tiempoRestante <= 0) {
+                    clearInterval(intervaloTemporizador);
+                    pasarTurno(); // Forzamos el paso de turno por inactividad/bloqueo
+                }
+            }, 1000);
+        }
+
+        function detenerTemporizador() {
+            clearInterval(intervaloTemporizador);
+            tiempoRestante = 30;
+            actualizarUITemporizador();
+        }
+        // ---------------------------------------
+
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
-        const COORDENADA_SALIDA = 4; // Respetamos tu coordenada exacta de salida
+        const COORDENADA_SALIDA = 4;
 
         const rutas = {
             'red': [[72.0, 28.5], [71.9, 12.2], [87.3, 14.1], [87.8, 29.0], [89.8, 44.1], [83.1, 43.9], [75.8, 44.0], [69.1, 44.1], [63.2, 44.6], [56.3, 37.6], [55.9, 30.6], [56.0, 23.9], [56.1, 17.3], [56.1, 11.0], [56.4, 4.4], [49.9, 4.2], [43.5, 3.7], [43.6, 10.4], [43.3, 18.4], [43.2, 24.4], [43.3, 30.6], [43.6, 38.1], [36.8, 44.3], [29.7, 43.9], [23.1, 44.0], [16.9, 44.1], [10.0, 44.1], [3.5, 44.2], [3.8, 50.8], [3.6, 57.5], [9.7, 57.1], [16.9, 57.9], [24.1, 58.0], [30.0, 57.5], [37.0, 56.8], [43.6, 63.9], [43.6, 70.6], [43.7, 77.0], [43.4, 84.4], [43.7, 90.9], [43.4, 97.1], [49.7, 96.6], [56.5, 96.5], [56.8, 90.6], [56.5, 83.4], [57.5, 76.8], [56.9, 70.2], [56.9, 63.8], [63.8, 56.7], [69.8, 57.0], [76.4, 57.3], [82.4, 57.5], [89.1, 57.1], [96.0, 57.9], [96.2, 50.7], [89.0, 50.7], [83.2, 50.3], [76.4, 50.6], [68.9, 51.0], [62.9, 51.2], [55.9, 51.0]],
@@ -195,14 +233,13 @@
             
             actualizarDistintivos();
             
-            // LÓGICA MODIFICADA: Si ya completó las 4 fichas, pasamos turno SIEMPRE, 
-            // ignorando la regla del 1 o 6 para el turno extra.
             if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) {
                 pasarTurno();
             } else { 
                 valorDado = 0; 
                 document.getElementById('dado-img').style.display = 'none'; 
                 document.getElementById('btn-lanzar').disabled = false; 
+                iniciarTemporizador(); // Reinicia los 30s para el turno extra
             }
         }
 
@@ -247,25 +284,33 @@
                 if (valorDado === 6 || valorDado === 1) { 
                     intentosSalida = 0; 
                     document.getElementById('btn-lanzar').disabled = false; 
+                    iniciarTemporizador(); // Resetea tiempo para que haga clic en la ficha a sacar
                 }
                 else { 
                     intentosSalida++; 
                     if (intentosSalida >= 3) { 
                         intentosSalida = 0; 
+                        detenerTemporizador();
                         setTimeout(pasarTurno, 1000); 
-                    } 
+                    } else {
+                        iniciarTemporizador(); // Resetea tiempo para que vuelva a lanzar el dado
+                    }
                 }
-            } else { document.getElementById('btn-lanzar').disabled = true; }
+            } else { 
+                document.getElementById('btn-lanzar').disabled = true; 
+                iniciarTemporizador(); // Resetea tiempo para elegir qué ficha mover
+            }
         }
 
         function pasarTurno() {
+            detenerTemporizador(); // Pausa el tiempo mientras realiza las validaciones
             if (clasificacion.length >= 3) {
                 let ultimo = codigosColor.find(c => !clasificacion.includes(c));
                 if(ultimo && !clasificacion.includes(ultimo)) {
                     clasificacion.push(ultimo);
                     actualizarClasificacion();
                 }
-                document.getElementById('indicador-turno').innerText = "FIN DE PARTIDA";
+                document.getElementById('indicador-turno').innerHTML = `<span id="texto-turno">FIN DE PARTIDA</span>`;
                 document.getElementById('btn-lanzar').disabled = true;
                 return; 
             }
@@ -275,9 +320,13 @@
             let turnosBuscados = 0;
             do { turno = (turno + 1) % 4; turnosBuscados++; } while (clasificacion.includes(codigosColor[turno]) && turnosBuscados < 4);
             const colorAct = codigosColor[turno];
-            document.getElementById('indicador-turno').innerText = `Turno: ${colores[turno]}`;
+            
+            // Actualiza visualmente el turno y restituye el temporizador UI
+            document.getElementById('indicador-turno').innerHTML = `<span id="texto-turno">Turno: ${colores[turno]}</span><span id="temporizador-ui" style="float: right;">⏱ 30s</span>`;
             document.getElementById('indicador-turno').style.backgroundColor = colorAct;
+            
             actualizarEventosClic();
+            iniciarTemporizador(); // Arranca los 30s para el nuevo jugador
         }
 
         function actualizarEventosClic() {
@@ -316,6 +365,7 @@
         });
         actualizarClasificacion();
         actualizarEventosClic();
+        iniciarTemporizador(); // Comienza a correr el tiempo desde el segundo cero
     </script>
 </body>
 </html>
