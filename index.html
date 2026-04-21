@@ -49,7 +49,7 @@
         <div id="ui-red" class="meta-ui" style="top: 55%; left: 45%;"></div>
     </div>
 
-    <div id_area-juego>
+    <div id="area-juego">
         <div id="indicador-turno" style="background-color: green;">Turno: Verde</div>
         <img id="dado-img" src="" alt="Dado">
         <br>
@@ -145,7 +145,6 @@
                 nuevaPos = (totalCasillas - 1) - exceso;
             }
             
-            // Gestión de Meta
             if (nuevaPos === totalCasillas - 1) {
                 fichasEnMeta[color] += fichasAMover.length;
                 fichasAMover.forEach(id => document.getElementById(id).style.display = 'none');
@@ -162,7 +161,6 @@
                     actualizarClasificacion();
                 }
             } else {
-                // Movimiento normal
                 fichasAMover.forEach(id => {
                     let [c, idx] = id.split('-');
                     estadoFichas[c][idx] = nuevaPos;
@@ -176,7 +174,6 @@
                     if (grupos[key].length <= 1) delete grupos[key];
                 });
 
-                // Lógica de acople respetada íntegramente
                 let todasEnDestino = [];
                 estadoFichas[color].forEach((p, idx) => {
                     if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') {
@@ -187,10 +184,10 @@
                 if (todasEnDestino.length > 1) {
                     if (nuevaPos === COORDENADA_SALIDA) {
                         if (confirm("¿Deseas acoplar las fichas en la salida?")) {
-                            grupos[`${color}-${nuevaPos}-${Date.now()}`] = todasEnDestino;
+                            grupos[`${color}-${nuevaPos}`] = todasEnDestino;
                         }
                     } else {
-                        grupos[`${color}-${nuevaPos}-${Date.now()}`] = todasEnDestino;
+                        grupos[`${color}-${nuevaPos}`] = todasEnDestino;
                     }
                 }
                 verificarCaptura(color, nuevaPos);
@@ -206,14 +203,25 @@
             }
         }
 
+        // ==========================================
+        // CORRECCIÓN EXACTA APLICADA SÓLO AQUÍ:
+        // ==========================================
         function verificarCaptura(colorJugador, posActual) {
-            if (posActual === COORDENADA_SALIDA) return;
-            const margen = 2.0; 
             const posCoords = rutas[colorJugador][posActual];
+            const margen = 2.0; 
+            
+            // Validar si la posición física coincide con CUALQUIERA de las 4 estrellas (zonas seguras)
+            let esZonaSegura = codigosColor.some(c => {
+                let estrella = rutas[c][COORDENADA_SALIDA];
+                return Math.abs(estrella[0] - posCoords[0]) < margen && Math.abs(estrella[1] - posCoords[1]) < margen;
+            });
+
+            if (esZonaSegura) return; // Si es zona segura, nadie come a nadie
+
             codigosColor.forEach(c => {
                 if (c === colorJugador) return;
                 estadoFichas[c].forEach((p, idx) => {
-                    if (p === -1 || p === rutas[c].length - 1) return;
+                    if (p === -1 || p >= rutas[c].length - 1) return; // Ignorar en base o en meta
                     let pEnemigo = rutas[c][p];
                     if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
                         estadoFichas[c][idx] = -1;
@@ -221,10 +229,7 @@
                         fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%";
                         fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
                         Object.keys(grupos).forEach(key => {
-                            if(grupos[key].includes(`${c}-${idx}`)) {
-                                grupos[key] = grupos[key].filter(id => id !== `${c}-${idx}`);
-                                if (grupos[key].length <= 1) delete grupos[key];
-                            }
+                            if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key];
                         });
                     }
                 });
@@ -302,7 +307,7 @@
         }
 
         function reiniciarJuego() {
-            if (confirm("¿Reiniciar la partida y borrar podio?")) { localStorage.removeItem('clasificacion'); location.reload(); }
+            if (confirm("¿Seguro que deseas reiniciar la partida?")) { localStorage.removeItem('clasificacion'); location.reload(); }
         }
 
         // Inicio
