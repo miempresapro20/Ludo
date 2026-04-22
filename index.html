@@ -41,9 +41,38 @@
         .puesto-item { display: flex; justify-content: space-between; padding: 10px 20px; margin: 5px 0; border-radius: 8px; background: #34495e; border-left: 10px solid transparent; }
         
         .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; border-radius: 5px; border: none; font-weight: bold; }
+        
+        /* Botones de Lobby desactivados */
+        #botones-colores .btn:disabled { opacity: 0.3; cursor: not-allowed; }
     </style>
 </head>
 <body>
+    <div id="capa-lobby" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
+        <h2 id="titulo-lobby">Configuración de Partida</h2>
+        
+        <div id="paso-1">
+            <input type="text" id="input-nick" placeholder="Tu Apodo" style="padding: 10px; font-size: 18px; border-radius: 5px; border: none; width: 250px; text-align: center;"><br><br>
+            <button class="btn" style="background: #3498db; color: white;" onclick="validarNick()">Siguiente</button>
+        </div>
+
+        <div id="paso-2" style="display: none;">
+            <p id="info-sala" style="color: #f1c40f; font-weight: bold; font-size: 20px;"></p>
+            <p>Selecciona un color disponible:</p>
+            <div id="botones-colores" style="display: flex; flex-direction: column; gap: 10px; max-width: 200px; margin: 0 auto;">
+                <button id="btn-color-0" class="btn" onclick="elegirColor(0)" style="background: green; color: white;">Verde</button>
+                <button id="btn-color-1" class="btn" onclick="elegirColor(1)" style="background: #f1c40f; color: black;">Amarillo</button>
+                <button id="btn-color-2" class="btn" onclick="elegirColor(2)" style="background: blue; color: white;">Azul</button>
+                <button id="btn-color-3" class="btn" onclick="elegirColor(3)" style="background: red; color: white;">Rojo</button>
+            </div>
+            <p id="msg-espera" style="margin-top: 20px; font-style: italic; color: #bdc3c7;"></p>
+            <button id="btn-iniciar-partida" class="btn" style="display: none; background: #27ae60; color: white; margin-top: 15px;" onclick="iniciarPartidaOficial()">¡COMENZAR JUEGO!</button>
+            
+            <div style="margin-top: 30px; background: #34495e; padding: 15px; border-radius: 8px;">
+                <p style="font-size: 14px; margin-top: 0;">Comparte este link para invitar:</p>
+                <input type="text" id="link-compartir" readonly style="width: 100%; padding: 8px; font-size: 12px; border-radius: 4px; border: none; text-align: center; color: #333;" onclick="this.select()">
+            </div>
+        </div>
+    </div>
     <h1>Ludo Family</h1>
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
@@ -85,8 +114,102 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        const partidaRef = db.ref('partida');
         
+        // --- SISTEMA DE LOBBY Y SALAS ---
+        let partidaRef; // Se inicializará cuando comience el juego
+        let miColorIdx = null; 
+        let apodo = "";
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        let idSala = urlParams.get('sala');
+        if (!idSala) idSala = Math.floor(1000 + Math.random() * 9000).toString();
+
+        const linkCompleto = window.location.origin + window.location.pathname + "?sala=" + idSala;
+        document.getElementById('link-compartir').value = linkCompleto;
+
+        const salaRef = db.ref('salas/' + idSala);
+        const jugadoresRef = salaRef.child('jugadores');
+
+        function validarNick() {
+            apodo = document.getElementById('input-nick').value.trim();
+            if (apodo.length < 2) return alert("Por favor, escribe un apodo válido.");
+            document.getElementById('paso-1').style.display = 'none';
+            document.getElementById('paso-2').style.display = 'block';
+            document.getElementById('info-sala').innerText = "Sala: " + idSala;
+            escucharJugadoresLobby();
+        }
+
+        function escucharJugadoresLobby() {
+            jugadoresRef.on('value', (snapshot) => {
+                const jugadores = snapshot.val() || {};
+                const coloresLocales = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
+                
+                coloresLocales.forEach((colorTxt, idx) => {
+                    const btn = document.getElementById(`btn-color-${idx}`);
+                    const ocupado = Object.values(jugadores).find(j => j.colorIdx === idx);
+                    
+                    if (ocupado) {
+                        btn.disabled = true;
+                        btn.innerText = `${colorTxt} (${ocupado.nick})`;
+                    } else {
+                        btn.disabled = false;
+                        btn.innerText = colorTxt;
+                    }
+                });
+
+                const numJugadores = Object.keys(jugadores).length;
+                if (numJugadores >= 2 && miColorIdx !== null) {
+                    document.getElementById('msg-espera').innerText = `Jugadores listos: ${numJugadores}/4`;
+                    document.getElementById('btn-iniciar-partida').style.display = 'inline-block';
+                }
+            });
+
+            salaRef.child('estado').on('value', (snapshot) => {
+                if (snapshot.val() === 'jugando') {
+                    document.getElementById('capa-lobby').style.display = 'none';
+                    conectarMotorAFirebase();
+                }
+            });
+        }
+
+        function elegirColor(idx) {
+            miColorIdx = idx;
+            jugadoresRef.push({ nick: apodo, colorIdx: idx });
+            document.getElementById('botones-colores').style.display = 'none';
+            document.getElementById('msg-espera').innerText = "Esperando a que alguien inicie la partida...";
+        }
+
+        function iniciarPartidaOficial() {
+            salaRef.update({ estado: 'jugando' });
+        }
+
+        // --- CONEXIÓN DEL MOTOR A FIREBASE ---
+        function conectarMotorAFirebase() {
+            partidaRef = db.ref('salas/' + idSala + '/partida');
+            
+            partidaRef.on('value', (snapshot) => {
+                if (ignorarSincronizacion) return;
+                const data = snapshot.val();
+                if (data) {
+                    turno = data.turno !== undefined ? data.turno : 0;
+                    valorDado = data.valorDado !== undefined ? data.valorDado : 0;
+                    intentosSalida = data.intentosSalida !== undefined ? data.intentosSalida : 0;
+                    fichasEnMeta = data.fichasEnMeta || { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
+                    clasificacion = data.clasificacion || [];
+                    grupos = data.grupos || {};
+                    
+                    if (data.estadoFichas) {
+                        codigosColor.forEach(c => { estadoFichas[c] = data.estadoFichas[c] || [-1, -1, -1, -1]; });
+                    }
+                    actualizarVistaDesdeFirebase();
+                }
+            });
+
+            partidaRef.once('value').then((snapshot) => {
+                if (!snapshot.exists()) guardarEstadoEnFirebase();
+            });
+        }
+
         let ignorarSincronizacion = false;
 
         // --- VARIABLES GLOBALES DEL JUEGO ---
@@ -111,8 +234,8 @@
         let estadoFichas = {};
         codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
-        // --- FUNCIONES DE SINCRONIZACIÓN FIREBASE ---
         function guardarEstadoEnFirebase() {
+            if (!partidaRef) return;
             ignorarSincronizacion = true;
             partidaRef.set({
                 turno: turno,
@@ -126,29 +249,6 @@
                 setTimeout(() => ignorarSincronizacion = false, 500);
             });
         }
-
-        partidaRef.on('value', (snapshot) => {
-            if (ignorarSincronizacion) return;
-            const data = snapshot.val();
-            if (data) {
-                turno = data.turno !== undefined ? data.turno : 0;
-                valorDado = data.valorDado !== undefined ? data.valorDado : 0;
-                intentosSalida = data.intentosSalida !== undefined ? data.intentosSalida : 0;
-                fichasEnMeta = data.fichasEnMeta || { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
-                clasificacion = data.clasificacion || [];
-                grupos = data.grupos || {};
-                
-                if (data.estadoFichas) {
-                    codigosColor.forEach(c => { estadoFichas[c] = data.estadoFichas[c] || [-1, -1, -1, -1]; });
-                }
-                actualizarVistaDesdeFirebase();
-            }
-        });
-
-        // Aseguramos de inicializar la DB si es la primera vez que se abre
-        partidaRef.once('value').then((snapshot) => {
-            if (!snapshot.exists()) guardarEstadoEnFirebase();
-        });
 
         function actualizarVistaDesdeFirebase() {
             if (clasificacion.length >= 3) {
@@ -196,7 +296,7 @@
             iniciarTemporizador(); 
         }
 
-        // --- SISTEMA DE TEMPORIZADOR AÑADIDO ---
+        // --- SISTEMA DE TEMPORIZADOR ---
         let tiempoRestante = 30;
         let intervaloTemporizador;
 
@@ -218,7 +318,10 @@
                 actualizarUITemporizador();
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
-                    pasarTurno(); 
+                    // Solo el dueño del turno debe ejecutar pasarTurno por inactividad para no duplicar llamadas a Firebase
+                    if (miColorIdx !== null && turno === miColorIdx) {
+                        pasarTurno(); 
+                    }
                 }
             }, 1000);
         }
@@ -229,7 +332,7 @@
             actualizarUITemporizador();
         }
 
-        // --- FUNCIONES DEL MOTOR DEL JUEGO (INTACTAS) ---
+        // --- FUNCIONES DEL MOTOR DEL JUEGO ---
         function actualizarDistintivos() {
             document.querySelectorAll('.badge-grupo').forEach(b => b.remove());
             Object.keys(grupos).forEach(key => {
@@ -266,6 +369,8 @@
         }
 
         function realizarMovimiento(color, i) {
+            // PROTECCIÓN: Solo el dueño del color puede mover
+            if (miColorIdx === null || turno !== miColorIdx) return;
             if (valorDado === 0 || color !== codigosColor[turno]) return;
             
             let grupoKey = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
@@ -343,7 +448,7 @@
                 document.getElementById('dado-img').style.display = 'none'; 
                 document.getElementById('btn-lanzar').disabled = false; 
                 iniciarTemporizador(); 
-                guardarEstadoEnFirebase(); // Sincroniza al jugar sin ceder turno
+                guardarEstadoEnFirebase();
             }
         }
 
@@ -378,6 +483,12 @@
         }
 
         function lanzarDado() {
+            // PROTECCIÓN: Solo el dueño del color puede lanzar
+            if (miColorIdx === null || turno !== miColorIdx) {
+                alert("No es tu turno. Espera a que tire el jugador " + colores[turno]);
+                return;
+            }
+
             let actual = codigosColor[turno];
             let todasEnBase = estadoFichas[actual].every(pos => pos === -1);
             valorDado = Math.floor(Math.random() * 6) + 1;
@@ -389,14 +500,14 @@
                     intentosSalida = 0; 
                     document.getElementById('btn-lanzar').disabled = false; 
                     iniciarTemporizador(); 
-                    guardarEstadoEnFirebase(); // Sincroniza que ya se lanzó
+                    guardarEstadoEnFirebase();
                 }
                 else { 
                     intentosSalida++; 
                     if (intentosSalida >= 3) { 
                         intentosSalida = 0; 
                         detenerTemporizador();
-                        guardarEstadoEnFirebase(); // Sincroniza visual antes del pase de turno automático
+                        guardarEstadoEnFirebase();
                         setTimeout(pasarTurno, 1000); 
                     } else {
                         iniciarTemporizador(); 
@@ -406,7 +517,7 @@
             } else { 
                 document.getElementById('btn-lanzar').disabled = true; 
                 iniciarTemporizador(); 
-                guardarEstadoEnFirebase(); // Muestra a todos lo que sacaste
+                guardarEstadoEnFirebase();
             }
         }
 
@@ -435,13 +546,15 @@
             
             actualizarEventosClic();
             iniciarTemporizador(); 
-            guardarEstadoEnFirebase(); // Envía a todos el pase de turno definitivo
+            guardarEstadoEnFirebase();
         }
 
         function actualizarEventosClic() {
             codigosColor.forEach(c => {
                 for (let i = 0; i < 4; i++) {
                     const ficha = document.getElementById(`${c}-${i}`);
+                    // Se desactiva la selección visual si no es el turno, 
+                    // independientemente de la protección interna de realizarMovimiento
                     if (ficha) { ficha.style.pointerEvents = (c === codigosColor[turno] && !clasificacion.includes(c)) ? 'auto' : 'none'; }
                 }
             });
@@ -464,15 +577,14 @@
         }
 
         function reiniciarJuego() {
-            if (confirm("¿Seguro que deseas reiniciar la partida para TODOS?")) { 
-                // Al vaciar la referencia, limpiamos el tablero de todos
-                partidaRef.remove().then(() => {
-                    location.reload(); 
+            if (confirm("¿Seguro que deseas reiniciar la sala completa?")) { 
+                salaRef.remove().then(() => {
+                    location.search = ""; // Quita el ID de la URL y recarga creando una nueva sala
                 });
             }
         }
 
-        // Inicio Estructural del Tablero Local (antes de conectarse a internet)
+        // Inicio Estructural del Tablero Local (Detrás del Lobby)
         codigosColor.forEach(c => {
             crearFichasBase(rutas[c], c);
             actualizarMetaUI(c);
