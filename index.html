@@ -2,7 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor Versión Final</title>
+    <title>Ludo Family: Motor Versión Final Multiplayer</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
     <style>
         body { display: flex; flex-direction: column; align-items: center; background: #2c3e50; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
         #contenedor-tablero { position: relative; width: 90vmin; height: 90vmin; border: 5px solid #34495e; border-radius: 10px; overflow: hidden; }
@@ -70,48 +74,29 @@
     </div>
 
     <script>
+        // --- CONFIGURACIÓN DE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyANAn_VqAg_Sa0-ZQl9UOLh7mkew-uddE8",
+            authDomain: "ludofamily-aed5a.firebaseapp.com",
+            projectId: "ludofamily-aed5a",
+            storageBucket: "ludofamily-aed5a.firebasestorage.app",
+            messagingSenderId: "668858748639",
+            appId: "1:668858748639:web:e7fefe14b21352ff5be36a"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const partidaRef = db.ref('partida');
+        
+        let ignorarSincronizacion = false;
+
+        // --- VARIABLES GLOBALES DEL JUEGO ---
         let turno = 0; 
         let valorDado = 0;
         let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
-        let clasificacion = JSON.parse(localStorage.getItem('clasificacion')) || [];
+        let clasificacion = [];
         let grupos = {}; 
-
-        // --- SISTEMA DE TEMPORIZADOR AÑADIDO ---
-        let tiempoRestante = 30;
-        let intervaloTemporizador;
-
-        function actualizarUITemporizador() {
-            const tempUI = document.getElementById('temporizador-ui');
-            if (tempUI) {
-                tempUI.innerText = `⏱ ${tiempoRestante}s`;
-                // Efecto rojo de alerta cuando quedan 5 segundos o menos
-                if (tiempoRestante <= 5) tempUI.style.color = '#ffcccb'; 
-                else tempUI.style.color = 'white';
-            }
-        }
-
-        function iniciarTemporizador() {
-            clearInterval(intervaloTemporizador);
-            tiempoRestante = 30;
-            actualizarUITemporizador();
-            intervaloTemporizador = setInterval(() => {
-                tiempoRestante--;
-                actualizarUITemporizador();
-                if (tiempoRestante <= 0) {
-                    clearInterval(intervaloTemporizador);
-                    pasarTurno(); // Forzamos el paso de turno por inactividad/bloqueo
-                }
-            }, 1000);
-        }
-
-        function detenerTemporizador() {
-            clearInterval(intervaloTemporizador);
-            tiempoRestante = 30;
-            actualizarUITemporizador();
-        }
-        // ---------------------------------------
-
+        
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
         const COORDENADA_SALIDA = 4;
@@ -126,6 +111,125 @@
         let estadoFichas = {};
         codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
+        // --- FUNCIONES DE SINCRONIZACIÓN FIREBASE ---
+        function guardarEstadoEnFirebase() {
+            ignorarSincronizacion = true;
+            partidaRef.set({
+                turno: turno,
+                valorDado: valorDado,
+                intentosSalida: intentosSalida,
+                fichasEnMeta: fichasEnMeta,
+                clasificacion: clasificacion,
+                grupos: grupos,
+                estadoFichas: estadoFichas
+            }).then(() => {
+                setTimeout(() => ignorarSincronizacion = false, 500);
+            });
+        }
+
+        partidaRef.on('value', (snapshot) => {
+            if (ignorarSincronizacion) return;
+            const data = snapshot.val();
+            if (data) {
+                turno = data.turno !== undefined ? data.turno : 0;
+                valorDado = data.valorDado !== undefined ? data.valorDado : 0;
+                intentosSalida = data.intentosSalida !== undefined ? data.intentosSalida : 0;
+                fichasEnMeta = data.fichasEnMeta || { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
+                clasificacion = data.clasificacion || [];
+                grupos = data.grupos || {};
+                
+                if (data.estadoFichas) {
+                    codigosColor.forEach(c => { estadoFichas[c] = data.estadoFichas[c] || [-1, -1, -1, -1]; });
+                }
+                actualizarVistaDesdeFirebase();
+            }
+        });
+
+        // Aseguramos de inicializar la DB si es la primera vez que se abre
+        partidaRef.once('value').then((snapshot) => {
+            if (!snapshot.exists()) guardarEstadoEnFirebase();
+        });
+
+        function actualizarVistaDesdeFirebase() {
+            if (clasificacion.length >= 3) {
+                document.getElementById('indicador-turno').innerHTML = `<span id="texto-turno">FIN DE PARTIDA</span>`;
+                document.getElementById('btn-lanzar').disabled = true;
+                detenerTemporizador();
+            } else {
+                const colorAct = codigosColor[turno];
+                document.getElementById('indicador-turno').innerHTML = `<span id="texto-turno">Turno: ${colores[turno]}</span><span id="temporizador-ui" style="float: right;">⏱ 30s</span>`;
+                document.getElementById('indicador-turno').style.backgroundColor = colorAct;
+            }
+
+            if (valorDado > 0) {
+                document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
+                document.getElementById('dado-img').style.display = 'inline-block';
+                document.getElementById('btn-lanzar').disabled = true;
+            } else {
+                document.getElementById('dado-img').style.display = 'none';
+                document.getElementById('btn-lanzar').disabled = (clasificacion.length >= 3);
+            }
+
+            codigosColor.forEach(c => {
+                actualizarMetaUI(c);
+                estadoFichas[c].forEach((pos, idx) => {
+                    const ficha = document.getElementById(`${c}-${idx}`);
+                    if (ficha) {
+                        if (pos === -1) {
+                            ficha.style.top = ficha.dataset.baseX + "%";
+                            ficha.style.left = ficha.dataset.baseY + "%";
+                            ficha.style.display = 'flex';
+                        } else if (pos >= rutas[c].length - 1) {
+                            ficha.style.display = 'none';
+                        } else {
+                            ficha.style.top = rutas[c][pos][0] + "%";
+                            ficha.style.left = rutas[c][pos][1] + "%";
+                            ficha.style.display = 'flex';
+                        }
+                    }
+                });
+            });
+
+            actualizarDistintivos();
+            actualizarClasificacion();
+            actualizarEventosClic();
+            iniciarTemporizador(); 
+        }
+
+        // --- SISTEMA DE TEMPORIZADOR AÑADIDO ---
+        let tiempoRestante = 30;
+        let intervaloTemporizador;
+
+        function actualizarUITemporizador() {
+            const tempUI = document.getElementById('temporizador-ui');
+            if (tempUI) {
+                tempUI.innerText = `⏱ ${tiempoRestante}s`;
+                if (tiempoRestante <= 5) tempUI.style.color = '#ffcccb'; 
+                else tempUI.style.color = 'white';
+            }
+        }
+
+        function iniciarTemporizador() {
+            clearInterval(intervaloTemporizador);
+            tiempoRestante = 30;
+            actualizarUITemporizador();
+            intervaloTemporizador = setInterval(() => {
+                tiempoRestante--;
+                actualizarUITemporizador();
+                if (tiempoRestante <= 0) {
+                    clearInterval(intervaloTemporizador);
+                    pasarTurno(); 
+                }
+            }, 1000);
+        }
+
+        function detenerTemporizador() {
+            clearInterval(intervaloTemporizador);
+            tiempoRestante = 30;
+            actualizarUITemporizador();
+        }
+
+        // --- FUNCIONES DEL MOTOR DEL JUEGO (INTACTAS) ---
         function actualizarDistintivos() {
             document.querySelectorAll('.badge-grupo').forEach(b => b.remove());
             Object.keys(grupos).forEach(key => {
@@ -195,7 +299,6 @@
 
                 if (fichasEnMeta[color] >= 4 && !clasificacion.includes(color)) {
                     clasificacion.push(color);
-                    localStorage.setItem('clasificacion', JSON.stringify(clasificacion));
                     actualizarClasificacion();
                 }
             } else {
@@ -239,7 +342,8 @@
                 valorDado = 0; 
                 document.getElementById('dado-img').style.display = 'none'; 
                 document.getElementById('btn-lanzar').disabled = false; 
-                iniciarTemporizador(); // Reinicia los 30s para el turno extra
+                iniciarTemporizador(); 
+                guardarEstadoEnFirebase(); // Sincroniza al jugar sin ceder turno
             }
         }
 
@@ -284,26 +388,30 @@
                 if (valorDado === 6 || valorDado === 1) { 
                     intentosSalida = 0; 
                     document.getElementById('btn-lanzar').disabled = false; 
-                    iniciarTemporizador(); // Resetea tiempo para que haga clic en la ficha a sacar
+                    iniciarTemporizador(); 
+                    guardarEstadoEnFirebase(); // Sincroniza que ya se lanzó
                 }
                 else { 
                     intentosSalida++; 
                     if (intentosSalida >= 3) { 
                         intentosSalida = 0; 
                         detenerTemporizador();
+                        guardarEstadoEnFirebase(); // Sincroniza visual antes del pase de turno automático
                         setTimeout(pasarTurno, 1000); 
                     } else {
-                        iniciarTemporizador(); // Resetea tiempo para que vuelva a lanzar el dado
+                        iniciarTemporizador(); 
+                        guardarEstadoEnFirebase();
                     }
                 }
             } else { 
                 document.getElementById('btn-lanzar').disabled = true; 
-                iniciarTemporizador(); // Resetea tiempo para elegir qué ficha mover
+                iniciarTemporizador(); 
+                guardarEstadoEnFirebase(); // Muestra a todos lo que sacaste
             }
         }
 
         function pasarTurno() {
-            detenerTemporizador(); // Pausa el tiempo mientras realiza las validaciones
+            detenerTemporizador(); 
             if (clasificacion.length >= 3) {
                 let ultimo = codigosColor.find(c => !clasificacion.includes(c));
                 if(ultimo && !clasificacion.includes(ultimo)) {
@@ -312,6 +420,7 @@
                 }
                 document.getElementById('indicador-turno').innerHTML = `<span id="texto-turno">FIN DE PARTIDA</span>`;
                 document.getElementById('btn-lanzar').disabled = true;
+                guardarEstadoEnFirebase();
                 return; 
             }
             valorDado = 0;
@@ -321,12 +430,12 @@
             do { turno = (turno + 1) % 4; turnosBuscados++; } while (clasificacion.includes(codigosColor[turno]) && turnosBuscados < 4);
             const colorAct = codigosColor[turno];
             
-            // Actualiza visualmente el turno y restituye el temporizador UI
             document.getElementById('indicador-turno').innerHTML = `<span id="texto-turno">Turno: ${colores[turno]}</span><span id="temporizador-ui" style="float: right;">⏱ 30s</span>`;
             document.getElementById('indicador-turno').style.backgroundColor = colorAct;
             
             actualizarEventosClic();
-            iniciarTemporizador(); // Arranca los 30s para el nuevo jugador
+            iniciarTemporizador(); 
+            guardarEstadoEnFirebase(); // Envía a todos el pase de turno definitivo
         }
 
         function actualizarEventosClic() {
@@ -355,17 +464,21 @@
         }
 
         function reiniciarJuego() {
-            if (confirm("¿Seguro que deseas reiniciar la partida?")) { localStorage.removeItem('clasificacion'); location.reload(); }
+            if (confirm("¿Seguro que deseas reiniciar la partida para TODOS?")) { 
+                // Al vaciar la referencia, limpiamos el tablero de todos
+                partidaRef.remove().then(() => {
+                    location.reload(); 
+                });
+            }
         }
 
-        // Inicio
+        // Inicio Estructural del Tablero Local (antes de conectarse a internet)
         codigosColor.forEach(c => {
             crearFichasBase(rutas[c], c);
             actualizarMetaUI(c);
         });
         actualizarClasificacion();
         actualizarEventosClic();
-        iniciarTemporizador(); // Comienza a correr el tiempo desde el segundo cero
     </script>
 </body>
 </html>
