@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Online 2.1 - Decisión de Acoplamiento</title>
+    <title>Ludo Family: Motor V3 (Arquitectura Walkie-Talkie)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -44,7 +44,6 @@
         
         #alerta-flotante { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #f39c12; padding: 15px 30px; border-radius: 8px; z-index: 2000; font-weight: bold; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
 
-        /* Estilo del Modal de Decisión */
         #modal-decision { 
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             background: #2c3e50; border: 3px solid #f1c40f; padding: 20px; border-radius: 15px; 
@@ -58,8 +57,8 @@
 
     <div id="modal-decision">
         <p style="font-size: 18px; margin-bottom: 20px;">¿Deseas acoplar las fichas en la salida?</p>
-        <button class="btn" style="background: #27ae60; color: white;" onclick="resolverAcoplamiento(true)">SÍ</button>
-        <button class="btn" style="background: #e74c3c; color: white;" onclick="resolverAcoplamiento(false)">NO</button>
+        <button class="btn" style="background: #27ae60; color: white;" onclick="responderModalAcople(true)">SÍ</button>
+        <button class="btn" style="background: #e74c3c; color: white;" onclick="responderModalAcople(false)">NO</button>
     </div>
 
     <div id="capa-lobby" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
@@ -97,12 +96,12 @@
 
     <div id="area-juego">
         <div id="indicador-turno" style="background-color: green;">
-            <span id="texto-turno">Turno: Verde</span>
-            <span id="temporizador-ui" style="float: right;">⏱ 30s</span>
+            <span id="texto-turno">Esperando Jugadores...</span>
+            <span id="temporizador-ui" style="float: right;">⏱</span>
         </div>
         <img id="dado-img" src="" alt="Dado">
         <br>
-        <button id="btn-lanzar" class="btn" style="background-color: #27ae60; color: white;" onclick="lanzarDado()">Lanzar Dado</button>
+        <button id="btn-lanzar" class="btn" style="background-color: #27ae60; color: white;" onclick="intentarLanzarDado()" disabled>Lanzar Dado</button>
         <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Reiniciar Sala</button>
         <div id="seccion-clasificacion">
             <h3 style="margin-top: 0;">Tabla de Posiciones</h3>
@@ -126,11 +125,8 @@
         let miColorIdx = null; 
         let apodo = "";
         let coloresActivos = []; 
-        let limiteTurnoMs = 0;   
         let soyElHost = false;   
-        let ignorarSincronizacion = false;
-        let decisionPendiente = null; // Para guardar el contexto de la ficha que espera respuesta
-
+        
         const urlParams = new URLSearchParams(window.location.search);
         let idSala = urlParams.get('sala');
         if (!idSala) idSala = Math.floor(1000 + Math.random() * 9000).toString();
@@ -194,43 +190,108 @@
                 let activos = [];
                 Object.values(jugadores).forEach(j => activos.push(j.colorIdx));
                 activos.sort((a,b) => a-b);
-                db.ref('salas/' + idSala + '/partida').update({
-                    coloresActivos: activos,
-                    turno: activos[0],
-                    inicioTurnoMs: firebase.database.ServerValue.TIMESTAMP
+                
+                // SISTEMA WALKIE-TALKIE: Enviamos el primer evento de ARRANQUE
+                db.ref('salas/' + idSala + '/partida/ultimoEvento').set({
+                    id: Date.now() + "_start",
+                    tipo: 'START',
+                    activos: activos,
+                    turnoInicial: activos[0]
                 }).then(() => { salaRef.update({ estado: 'jugando' }); });
             });
         }
 
+        // ==========================================
+        // LA NUEVA ARQUITECTURA WALKIE-TALKIE
+        // ==========================================
+        let ultimoEventoId = null;
+
         function conectarMotorAFirebase() {
             partidaRef = db.ref('salas/' + idSala + '/partida');
-            partidaRef.on('value', (snapshot) => {
-                if (ignorarSincronizacion) return;
-                const data = snapshot.val();
-                if (data) {
-                    coloresActivos = data.coloresActivos || [0, 1, 2, 3];
-                    turno = data.turno !== undefined ? data.turno : coloresActivos[0];
-                    valorDado = data.valorDado !== undefined ? data.valorDado : 0;
-                    fichasEnMeta = data.fichasEnMeta || { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
-                    clasificacion = data.clasificacion || [];
-                    grupos = data.grupos || {};
-                    let inicioServerMs = data.inicioTurnoMs || Date.now();
-                    limiteTurnoMs = inicioServerMs + 30000;
-                    soyElHost = (miColorIdx === coloresActivos[0]);
-                    if (data.estadoFichas) {
-                        codigosColor.forEach(c => { estadoFichas[c] = data.estadoFichas[c] || [-1, -1, -1, -1]; });
-                    }
-                    actualizarVistaDesdeFirebase();
-                }
+            
+            // Solo escuchamos el buzón "ultimoEvento", ahorrando 99% de datos
+            partidaRef.child('ultimoEvento').on('value', (snapshot) => {
+                const ev = snapshot.val();
+                if (!ev || ev.id === ultimoEventoId) return; // Ignorar si es un evento viejo
+                ultimoEventoId = ev.id;
+                procesarEventoRemoto(ev);
             });
         }
 
+        function enviarEvento(datos) {
+            if (!partidaRef) return;
+            datos.id = Date.now() + "_" + Math.random().toString(36).substr(2, 5); // ID Único
+            partidaRef.child('ultimoEvento').set(datos);
+        }
+
+        function procesarEventoRemoto(ev) {
+            switch(ev.tipo) {
+                case 'START':
+                    coloresActivos = ev.activos;
+                    turno = ev.turnoInicial;
+                    soyElHost = (miColorIdx === coloresActivos[0]);
+                    
+                    // Ocultar fichas que nadie usa
+                    codigosColor.forEach(c => {
+                        if (!coloresActivos.includes(codigosColor.indexOf(c))) {
+                            for(let i=0; i<4; i++) {
+                                let f = document.getElementById(`${c}-${i}`);
+                                if(f) f.style.display = 'none';
+                            }
+                        }
+                    });
+                    reiniciarTurnoVisual();
+                    break;
+                    
+                case 'DADO':
+                    valorDado = ev.valor;
+                    document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
+                    document.getElementById('dado-img').style.display = 'inline-block';
+                    document.getElementById('btn-lanzar').disabled = true;
+                    evaluarOpcionesDespuesDelDado();
+                    break;
+                    
+                case 'REINTENTO_DADO':
+                    valorDado = 0;
+                    document.getElementById('dado-img').style.display = 'none';
+                    if (miColorIdx === turno) document.getElementById('btn-lanzar').disabled = false;
+                    limiteTurnoMs = Date.now() + 30000; // Reset reloj
+                    break;
+                    
+                case 'MOVER':
+                    // Ejecutamos la matemática localmente!
+                    ejecutarMovimientoLocal(ev.color, ev.fichaIdx);
+                    break;
+                    
+                case 'ACOPLE':
+                    document.getElementById('modal-decision').style.display = 'none';
+                    resolverAcoplamientoMatematico(ev.color, ev.nuevaPos, ev.decision);
+                    break;
+                    
+                case 'PASAR_TURNO':
+                    turno = ev.siguienteTurno;
+                    intentosSalida = 0;
+                    valorDado = 0;
+                    document.getElementById('dado-img').style.display = 'none';
+                    document.getElementById('modal-decision').style.display = 'none';
+                    decisionPendiente = null;
+                    reiniciarTurnoVisual();
+                    break;
+            }
+        }
+
+        // ==========================================
+        // VARIABLES Y RUTAS LOCALES (INTACTAS)
+        // ==========================================
         let turno = 0; let valorDado = 0; let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = []; let grupos = {}; 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
         const COORDENADA_SALIDA = 4;
+        let limiteTurnoMs = 0;
+        let intervaloTemporizador;
+        let decisionPendiente = null;
 
         const rutas = {
             'red': [[72.0, 28.5], [71.9, 12.2], [87.3, 14.1], [87.8, 29.0], [89.8, 44.1], [83.1, 43.9], [75.8, 44.0], [69.1, 44.1], [63.2, 44.6], [56.3, 37.6], [55.9, 30.6], [56.0, 23.9], [56.1, 17.3], [56.1, 11.0], [56.4, 4.4], [49.9, 4.2], [43.5, 3.7], [43.6, 10.4], [43.3, 18.4], [43.2, 24.4], [43.3, 30.6], [43.6, 38.1], [36.8, 44.3], [29.7, 43.9], [23.1, 44.0], [16.9, 44.1], [10.0, 44.1], [3.5, 44.2], [3.8, 50.8], [3.6, 57.5], [9.7, 57.1], [16.9, 57.9], [24.1, 58.0], [30.0, 57.5], [37.0, 56.8], [43.6, 63.9], [43.6, 70.6], [43.7, 77.0], [43.4, 84.4], [43.7, 90.9], [43.4, 97.1], [49.7, 96.6], [56.5, 96.5], [56.8, 90.6], [56.5, 83.4], [57.5, 76.8], [56.9, 70.2], [56.9, 63.8], [63.8, 56.7], [69.8, 57.0], [76.4, 57.3], [82.4, 57.5], [89.1, 57.1], [96.0, 57.9], [96.2, 50.7], [89.0, 50.7], [83.2, 50.3], [76.4, 50.6], [68.9, 51.0], [62.9, 51.2], [55.9, 51.0]],
@@ -240,57 +301,208 @@
         };
         let estadoFichas = {}; codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
-        function guardarEstadoEnFirebase(reiniciarReloj = false) {
-            if (!partidaRef) return; ignorarSincronizacion = true;
-            let payload = { turno, valorDado, intentosSalida, fichasEnMeta, clasificacion, grupos, estadoFichas };
-            if (reiniciarReloj) payload.inicioTurnoMs = firebase.database.ServerValue.TIMESTAMP;
-            partidaRef.update(payload).then(() => { setTimeout(() => ignorarSincronizacion = false, 500); });
-        }
-
-        function actualizarVistaDesdeFirebase() {
+        // ==========================================
+        // FUNCIONES DE CONTROL LOCAL
+        // ==========================================
+        function reiniciarTurnoVisual() {
             let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
             if (clasificacion.length >= objetivoMeta) {
                 document.getElementById('indicador-turno').innerHTML = `<span>FIN DE PARTIDA</span>`;
                 document.getElementById('btn-lanzar').disabled = true;
                 detenerTemporizador();
-            } else {
-                document.getElementById('indicador-turno').innerHTML = `<span>Turno: ${colores[turno]}</span><span id="temporizador-ui" style="float: right;">⏱</span>`;
-                document.getElementById('indicador-turno').style.backgroundColor = codigosColor[turno];
+                return;
             }
-            if (valorDado > 0) { document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`; document.getElementById('dado-img').style.display = 'inline-block'; document.getElementById('btn-lanzar').disabled = true; }
-            else { document.getElementById('dado-img').style.display = 'none'; document.getElementById('btn-lanzar').disabled = (clasificacion.length >= objetivoMeta); }
-            codigosColor.forEach(c => {
-                actualizarMetaUI(c);
-                estadoFichas[c].forEach((pos, idx) => {
-                    const ficha = document.getElementById(`${c}-${idx}`);
-                    if (ficha) {
-                        if (!coloresActivos.includes(codigosColor.indexOf(c))) ficha.style.display = 'none';
-                        else if (pos === -1) { ficha.style.top = ficha.dataset.baseX + "%"; ficha.style.left = ficha.dataset.baseY + "%"; ficha.style.display = 'flex'; }
-                        else if (pos >= rutas[c].length - 1) ficha.style.display = 'none';
-                        else { ficha.style.top = rutas[c][pos][0] + "%"; ficha.style.left = rutas[c][pos][1] + "%"; ficha.style.display = 'flex'; }
-                    }
-                });
-            });
-            actualizarDistintivos(); actualizarClasificacion(); actualizarEventosClic(); iniciarTemporizador(); 
+            
+            document.getElementById('indicador-turno').innerHTML = `<span>Turno: ${colores[turno]}</span><span id="temporizador-ui" style="float: right;">⏱</span>`;
+            document.getElementById('indicador-turno').style.backgroundColor = codigosColor[turno];
+            
+            document.getElementById('btn-lanzar').disabled = (miColorIdx !== turno);
+            actualizarEventosClic();
+            
+            limiteTurnoMs = Date.now() + 30000;
+            iniciarTemporizador();
         }
 
-        let intervaloTemporizador;
         function iniciarTemporizador() {
             clearInterval(intervaloTemporizador);
             intervaloTemporizador = setInterval(() => {
                 let tiempoRestante = Math.ceil((limiteTurnoMs - Date.now()) / 1000);
                 if (tiempoRestante < 0) tiempoRestante = 0;
+                
                 const tempUI = document.getElementById('temporizador-ui');
                 if (tempUI) { tempUI.innerText = `⏱ ${tiempoRestante}s`; tempUI.style.color = tiempoRestante <= 5 ? '#ffcccb' : 'white'; }
+                
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
-                    if (decisionPendiente) document.getElementById('modal-decision').style.display = 'none';
-                    if (miColorIdx === turno) pasarTurno();
-                    else if (soyElHost) pasarTurno();
+                    // Fuerza bruta si alguien se desconecta
+                    if (miColorIdx === turno || soyElHost) {
+                        calcularSiguienteTurnoYEnviar();
+                    }
                 }
             }, 1000);
         }
+
         function detenerTemporizador() { clearInterval(intervaloTemporizador); }
+
+        function calcularSiguienteTurnoYEnviar() {
+            let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
+            if (clasificacion.length >= objetivoMeta) return;
+
+            let proxTurno = turno;
+            let turnosBuscados = 0;
+            do { proxTurno = (proxTurno + 1) % 4; turnosBuscados++; } 
+            while ((!coloresActivos.includes(proxTurno) || clasificacion.includes(codigosColor[proxTurno])) && turnosBuscados < 4);
+            
+            enviarEvento({ tipo: 'PASAR_TURNO', siguienteTurno: proxTurno });
+        }
+
+        function intentarLanzarDado() {
+            if (miColorIdx === null || turno !== miColorIdx) return;
+            let valor = Math.floor(Math.random() * 6) + 1;
+            enviarEvento({ tipo: 'DADO', valor: valor }); // Solo avisamos el número
+        }
+
+        function evaluarOpcionesDespuesDelDado() {
+            let actual = codigosColor[turno];
+            let todasEnBase = estadoFichas[actual].every(pos => pos === -1);
+            
+            // Si el jugador local no tiene salida
+            if (todasEnBase && valorDado !== 6 && valorDado !== 1) {
+                if (miColorIdx === turno) {
+                    intentosSalida++;
+                    if (intentosSalida >= 3) { setTimeout(() => calcularSiguienteTurnoYEnviar(), 1000); }
+                    else { setTimeout(() => enviarEvento({ tipo: 'REINTENTO_DADO' }), 1000); }
+                }
+            } else {
+                // Se habilitan los clicks visualmente
+                actualizarEventosClic();
+            }
+        }
+
+        function intentarMovimientoFicha(color, i) {
+            // Protección: Solo el dueño puede tocar su ficha cuando es su turno y ya tiró el dado
+            if (miColorIdx === null || turno !== miColorIdx || valorDado === 0 || color !== codigosColor[turno]) return;
+            
+            let posActual = estadoFichas[color][i];
+            if (posActual === -1 && valorDado !== 6 && valorDado !== 1) return; // No puede salir de base
+            
+            // Si es un click legal, avisamos al mundo qué ficha vamos a mover
+            enviarEvento({ tipo: 'MOVER', color: color, fichaIdx: i });
+        }
+
+        // ==========================================
+        // LA MATEMÁTICA PURA (SE EJECUTA PARA TODOS)
+        // ==========================================
+        function ejecutarMovimientoLocal(color, i) {
+            let grupoKey = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
+            let fichasAMover = grupoKey ? grupos[grupoKey] : [`${color}-${i}`];
+            let posActual = estadoFichas[color][i];
+            
+            let nuevaPos = posActual === -1 ? COORDENADA_SALIDA : posActual + valorDado;
+            if (nuevaPos >= rutas[color].length) { nuevaPos = (rutas[color].length - 1) - (nuevaPos - (rutas[color].length - 1)); }
+
+            if (nuevaPos === rutas[color].length - 1) {
+                fichasEnMeta[color] += fichasAMover.length;
+                fichasAMover.forEach(id => document.getElementById(id).style.display = 'none');
+                actualizarMetaUI(color);
+                
+                Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
+                if (fichasEnMeta[color] >= 4 && !clasificacion.includes(color)) {
+                    clasificacion.push(color);
+                    actualizarClasificacion();
+                }
+                finalizarMovimientoPasoTurno(color);
+            } else {
+                fichasAMover.forEach(id => { 
+                    let [c, idx] = id.split('-'); 
+                    estadoFichas[c][idx] = nuevaPos;
+                    const fichaDOM = document.getElementById(id);
+                    fichaDOM.style.top = rutas[c][nuevaPos][0] + "%";
+                    fichaDOM.style.left = rutas[c][nuevaPos][1] + "%";
+                });
+                
+                Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
+                
+                let todasEnDestino = [];
+                estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
+
+                // TU REGLA DE ORO DE SALIDA:
+                if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
+                    if (miColorIdx === turno) {
+                        decisionPendiente = { color, nuevaPos, todasEnDestino };
+                        document.getElementById('modal-decision').style.display = 'block';
+                    }
+                    // Los demás jugadores simplemente se quedan esperando viendo la pantalla, no se trancan
+                } else {
+                    if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
+                    verificarCaptura(color, nuevaPos);
+                    finalizarMovimientoPasoTurno(color);
+                }
+            }
+            actualizarDistintivos();
+        }
+
+        function responderModalAcople(quiereAcoplar) {
+            if (!decisionPendiente) return;
+            enviarEvento({ tipo: 'ACOPLE', color: decisionPendiente.color, nuevaPos: decisionPendiente.nuevaPos, decision: quiereAcoplar });
+        }
+
+        function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
+            let todasEnDestino = [];
+            estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
+            
+            if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
+            verificarCaptura(color, nuevaPos);
+            actualizarDistintivos();
+            finalizarMovimientoPasoTurno(color);
+        }
+
+        function finalizarMovimientoPasoTurno(color) {
+            if (miColorIdx !== turno) return; // Solo el que juega toma la decisión del turno
+            
+            if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) {
+                setTimeout(() => calcularSiguienteTurnoYEnviar(), 500);
+            } else {
+                setTimeout(() => enviarEvento({ tipo: 'REINTENTO_DADO' }), 500);
+            }
+        }
+
+        function verificarCaptura(colorJugador, posActual) {
+            const posCoords = rutas[colorJugador][posActual];
+            const margen = 2.0; 
+            let esZonaSegura = codigosColor.some(c => { let estrella = rutas[c][COORDENADA_SALIDA]; return Math.abs(estrella[0] - posCoords[0]) < margen && Math.abs(estrella[1] - posCoords[1]) < margen; });
+            if (esZonaSegura) return;
+            
+            codigosColor.forEach(c => {
+                if (c === colorJugador) return;
+                estadoFichas[c].forEach((p, idx) => {
+                    if (p === -1 || p >= rutas[c].length - 1) return;
+                    let pEnemigo = rutas[c][p];
+                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
+                        estadoFichas[c][idx] = -1;
+                        const fichaDefensora = document.getElementById(`${c}-${idx}`);
+                        fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%";
+                        fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
+                        Object.keys(grupos).forEach(key => { if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key]; });
+                    }
+                });
+            });
+        }
+
+        // ==========================================
+        // UI & HERRAMIENTAS
+        // ==========================================
+        function actualizarEventosClic() {
+            codigosColor.forEach(c => {
+                for (let i = 0; i < 4; i++) {
+                    const ficha = document.getElementById(`${c}-${i}`);
+                    if (ficha) { 
+                        // Solo brillar si es turno Y hay valorDado (listo para mover)
+                        ficha.style.pointerEvents = (c === codigosColor[turno] && !clasificacion.includes(c) && valorDado > 0) ? 'auto' : 'none'; 
+                    }
+                }
+            });
+        }
 
         function actualizarDistintivos() {
             document.querySelectorAll('.badge-grupo').forEach(b => b.remove());
@@ -307,6 +519,7 @@
                 }
             });
         }
+
         function actualizarMetaUI(color) { const el = document.getElementById(`ui-${color}`); el.innerText = fichasEnMeta[color] > 0 ? fichasEnMeta[color] : ""; }
         function actualizarClasificacion() {
             const lista = document.getElementById('lista-clasificacion'); lista.innerHTML = "";
@@ -317,117 +530,6 @@
             });
         }
 
-        // ==========================================
-        // SISTEMA DE MOVIMIENTO Y TU REGLA DE ORO
-        // ==========================================
-        function realizarMovimiento(color, i) {
-            if (miColorIdx === null || turno !== miColorIdx || valorDado === 0 || color !== codigosColor[turno]) return;
-            let grupoKey = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
-            let fichasAMover = grupoKey ? grupos[grupoKey] : [`${color}-${i}`];
-            let posActual = estadoFichas[color][i];
-            let nuevaPos = posActual === -1 ? (valorDado === 6 || valorDado === 1 ? COORDENADA_SALIDA : -1) : posActual + valorDado;
-            if (nuevaPos === -1) return;
-            if (nuevaPos >= rutas[color].length) { nuevaPos = (rutas[color].length - 1) - (nuevaPos - (rutas[color].length - 1)); }
-
-            if (nuevaPos === rutas[color].length - 1) {
-                fichasEnMeta[color] += fichasAMover.length;
-                fichasAMover.forEach(id => document.getElementById(id).style.display = 'none');
-                actualizarMetaUI(color);
-                Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
-                if (fichasEnMeta[color] >= 4 && !clasificacion.includes(color)) clasificacion.push(color);
-                finalizarMovimiento(color, nuevaPos);
-            } else {
-                fichasAMover.forEach(id => { let [c, idx] = id.split('-'); estadoFichas[c][idx] = nuevaPos; });
-                Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
-                
-                let todasEnDestino = [];
-                estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
-
-                // TU REGLA: Si cae en salida y hay más fichas propias, preguntar.
-                if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
-                    decisionPendiente = { color, nuevaPos, todasEnDestino };
-                    document.getElementById('modal-decision').style.display = 'block';
-                    // El flujo se detiene aquí hasta que el jugador responda o se acabe el tiempo
-                } else {
-                    if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
-                    verificarCaptura(color, nuevaPos);
-                    finalizarMovimiento(color, nuevaPos);
-                }
-            }
-        }
-
-        function resolverAcoplamiento(quiereAcoplar) {
-            document.getElementById('modal-decision').style.display = 'none';
-            if (!decisionPendiente) return;
-            const { color, nuevaPos, todasEnDestino } = decisionPendiente;
-            if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
-            verificarCaptura(color, nuevaPos);
-            let colorMover = color; let posMover = nuevaPos;
-            decisionPendiente = null;
-            finalizarMovimiento(colorMover, posMover);
-        }
-
-        function finalizarMovimiento(color, nuevaPos) {
-            actualizarDistintivos();
-            if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) pasarTurno();
-            else { valorDado = 0; document.getElementById('dado-img').style.display = 'none'; document.getElementById('btn-lanzar').disabled = false; guardarEstadoEnFirebase(false); }
-        }
-
-        function verificarCaptura(colorJugador, posActual) {
-            const posCoords = rutas[colorJugador][posActual];
-            const margen = 2.0; 
-            let esZonaSegura = codigosColor.some(c => { let estrella = rutas[c][COORDENADA_SALIDA]; return Math.abs(estrella[0] - posCoords[0]) < margen && Math.abs(estrella[1] - posCoords[1]) < margen; });
-            if (esZonaSegura) return;
-            codigosColor.forEach(c => {
-                if (c === colorJugador) return;
-                estadoFichas[c].forEach((p, idx) => {
-                    if (p === -1 || p >= rutas[c].length - 1) return;
-                    let pEnemigo = rutas[c][p];
-                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
-                        estadoFichas[c][idx] = -1;
-                        Object.keys(grupos).forEach(key => { if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key]; });
-                    }
-                });
-            });
-        }
-
-        function lanzarDado() {
-            if (miColorIdx === null || turno !== miColorIdx) { mostrarAlerta("No es tu turno."); return; }
-            let actual = codigosColor[turno];
-            let todasEnBase = estadoFichas[actual].every(pos => pos === -1);
-            valorDado = Math.floor(Math.random() * 6) + 1;
-            document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
-            document.getElementById('dado-img').style.display = 'inline-block';
-            if (todasEnBase && valorDado !== 6 && valorDado !== 1) {
-                intentosSalida++;
-                if (intentosSalida >= 3) { intentosSalida = 0; setTimeout(pasarTurno, 1000); }
-                else { guardarEstadoEnFirebase(false); }
-            } else { document.getElementById('btn-lanzar').disabled = true; guardarEstadoEnFirebase(false); }
-        }
-
-        function pasarTurno() {
-            detenerTemporizador();
-            let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
-            if (clasificacion.length >= objetivoMeta) {
-                let ultimo = codigosColor.find((c, idx) => coloresActivos.includes(idx) && !clasificacion.includes(c));
-                if(ultimo && !clasificacion.includes(ultimo)) clasificacion.push(ultimo);
-                guardarEstadoEnFirebase(false); return; 
-            }
-            valorDado = 0; intentosSalida = 0;
-            let turnosBuscados = 0;
-            do { turno = (turno + 1) % 4; turnosBuscados++; } while ((!coloresActivos.includes(turno) || clasificacion.includes(codigosColor[turno])) && turnosBuscados < 4);
-            actualizarEventosClic(); guardarEstadoEnFirebase(true);
-        }
-
-        function actualizarEventosClic() {
-            codigosColor.forEach(c => {
-                for (let i = 0; i < 4; i++) {
-                    const ficha = document.getElementById(`${c}-${i}`);
-                    if (ficha) ficha.style.pointerEvents = (c === codigosColor[turno] && !clasificacion.includes(c)) ? 'auto' : 'none';
-                }
-            });
-        }
-
         function crearFichasBase(lista, color) {
             const contenedor = document.getElementById('contenedor-tablero');
             lista.slice(0, 4).forEach((coord, i) => {
@@ -435,13 +537,16 @@
                 ficha.className = 'ficha'; ficha.style.backgroundColor = color;
                 ficha.style.top = coord[0] + "%"; ficha.style.left = coord[1] + "%";
                 ficha.dataset.baseX = coord[0]; ficha.dataset.baseY = coord[1];
-                ficha.id = `${color}-${i}`; ficha.onclick = () => realizarMovimiento(color, i);
+                ficha.id = `${color}-${i}`; 
+                // Enlace directo al nuevo modelo
+                ficha.onclick = () => intentarMovimientoFicha(color, i);
                 contenedor.appendChild(ficha);
             });
         }
 
         function reiniciarJuego() { if (confirm("¿Reiniciar sala?")) { salaRef.remove().then(() => { location.search = ""; }); } }
 
+        // Inicialización visual básica
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
     </script>
 </body>
