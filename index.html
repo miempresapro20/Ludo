@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V4.0 (Modo Local vs CPU Inteligente)</title>
+    <title>Ludo Family: Motor V4.1 (Modo Local Humanizado)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -68,8 +68,8 @@
         <h2>Ludo Family</h2>
         
         <div id="paso-0">
-            <button class="btn btn-grande" style="background: #8e44ad; color: white;" onclick="seleccionarModoJuego('local')">🕹️ JUGAR MODO LOCAL (vs CPU)</button>
-            <button class="btn btn-grande" style="background: #2980b9; color: white;" onclick="seleccionarModoJuego('online')">🌐 JUGAR ONLINE (Multijugador)</button>
+            <button class="btn btn-grande" style="background: #8e44ad; color: white;" onclick="seleccionarModoJuego('local')">🕹️ JUGAR MODO LOCAL</button>
+            <button class="btn btn-grande" style="background: #2980b9; color: white;" onclick="seleccionarModoJuego('online')">🌐 JUGAR ONLINE</button>
         </div>
 
         <div id="paso-1" style="display: none;">
@@ -97,9 +97,9 @@
             </div>
 
             <div id="controles-local" style="display: none; margin-top: 20px;">
-                <p>¿Contra cuántos bots quieres jugar?</p>
-                <button class="btn" style="background: #27ae60; color: white;" onclick="iniciarPartidaLocal(2)">1 vs 1 (Carlos)</button>
-                <button class="btn" style="background: #e67e22; color: white;" onclick="iniciarPartidaLocal(4)">Todos contra Todos</button>
+                <p>¿Cuántos jugadores participarán?</p>
+                <button class="btn" style="background: #27ae60; color: white;" onclick="iniciarPartidaLocal(2)">2 Jugadores</button>
+                <button class="btn" style="background: #e67e22; color: white;" onclick="iniciarPartidaLocal(4)">4 Jugadores</button>
             </div>
         </div>
     </div>
@@ -144,7 +144,7 @@
         let salaRef;
         let jugadoresRef;
         
-        let modoJuego = ''; // 'local' o 'online'
+        let modoJuego = ''; 
         let esModoLocal = false; 
         
         let miColorIdx = null; 
@@ -190,7 +190,7 @@
             document.getElementById('paso-2').style.display = 'block';
             
             if (esModoLocal) {
-                document.getElementById('info-sala').innerText = "Modo Local VS CPU";
+                document.getElementById('info-sala').innerText = "Partida Local";
             } else {
                 document.getElementById('info-sala').innerText = "Sala Online: " + idSala;
                 escucharJugadoresLobbyOnline();
@@ -258,10 +258,10 @@
             if (numJugadores === 2) {
                 let opuesto = (miColorIdx + 2) % 4; // Color de enfrente
                 activos.push(opuesto);
-                nicksMap[opuesto] = nombresBots[0] + " (CPU)";
+                nicksMap[opuesto] = nombresBots[0];
             } else {
                 for (let i = 0; i < 4; i++) {
-                    if (i !== miColorIdx) { activos.push(i); nicksMap[i] = nombresBots[bIndex++] + " (CPU)"; }
+                    if (i !== miColorIdx) { activos.push(i); nicksMap[i] = nombresBots[bIndex++]; }
                 }
             }
             activos.sort((a,b) => a-b);
@@ -303,7 +303,7 @@
                     coloresActivos = ev.activos;
                     nombresJugadores = ev.nicksMap || {};
                     turno = ev.turnoInicial;
-                    soyElHost = true; // En local y el creador online siempre asumen responsabilidad de bots/tiempo
+                    soyElHost = true; 
                     
                     codigosColor.forEach(c => {
                         if (!coloresActivos.includes(codigosColor.indexOf(c))) {
@@ -323,7 +323,7 @@
                     valorDado = 0; document.getElementById('dado-img').style.display = 'none';
                     if (miColorIdx === turno) document.getElementById('btn-lanzar').disabled = false;
                     limiteTurnoMs = Date.now() + 30000; 
-                    if (esModoLocal && turno !== miColorIdx) setTimeout(intentarLanzarDado, 1000); // Bot tira de nuevo
+                    if (esModoLocal && turno !== miColorIdx) setTimeout(intentarLanzarDado, 1000); 
                     break;
                 case 'MOVER': ejecutarMovimientoLocal(ev.color, ev.fichaIdx); break;
                 case 'ACOPLE':
@@ -347,7 +347,7 @@
             let opciones = [];
             for (let i = 0; i < 4; i++) {
                 let pos = estadoFichas[color][i];
-                if (pos >= rutas[color].length - 1) continue; // Ficha en meta
+                if (pos >= rutas[color].length - 1) continue; 
                 
                 if (pos === -1 && (valorDado === 1 || valorDado === 6)) {
                     opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
@@ -359,16 +359,14 @@
             }
 
             if (opciones.length > 0) {
-                let eleccion = opciones[0]; // Por defecto la primera que vea
+                let eleccion = opciones[0]; 
                 
                 let salida = opciones.find(o => o.accion === 'salir');
                 let cazador = opciones.find(o => compruebaCapturaSimulada(color, o.nuevaPos));
                 
-                // Prioridad Estricta:
-                if (salida) eleccion = salida; // 1. Salir a jugar
-                else if (cazador) eleccion = cazador; // 2. Matar
+                if (salida) eleccion = salida; 
+                else if (cazador) eleccion = cazador; 
                 else {
-                    // 3. Mover la ficha que esté más cerca de la meta
                     opciones.sort((a,b) => b.posActual - a.posActual);
                     eleccion = opciones[0];
                 }
@@ -389,7 +387,7 @@
                     if (p === -1 || p >= rutas[c].length - 1) continue;
                     let pEnemigo = rutas[c][p];
                     if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
-                        return true; // Hay un enemigo exactamente ahí
+                        return true; 
                     }
                 }
             }
@@ -432,7 +430,6 @@
             limiteTurnoMs = Date.now() + 30000;
             iniciarTemporizador();
 
-            // Si es un bot en Modo Local, lanza el dado automáticamente
             if (esModoLocal && turno !== miColorIdx) {
                 setTimeout(intentarLanzarDado, 1500); 
             }
@@ -469,7 +466,6 @@
         }
 
         function intentarLanzarDado() {
-            // Protección: Solo dispara si es turno del jugador, o si es un bot en modo local
             if (turno !== miColorIdx && !(esModoLocal && turno !== miColorIdx)) return;
             
             let valor = Math.floor(Math.random() * 6) + 1;
@@ -488,7 +484,6 @@
                 }
             } else {
                 actualizarEventosClic();
-                // Si es un bot en Modo Local, ejecuta su cerebro
                 if (esModoLocal && turno !== miColorIdx) {
                     setTimeout(() => ejecutarCerebroBot(actual), 1500);
                 }
@@ -549,10 +544,10 @@
                 estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
 
                 if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
-                    if (miColorIdx === turno) { // Humano
+                    if (miColorIdx === turno) { 
                         decisionPendiente = { color, nuevaPos, todasEnDestino };
                         document.getElementById('modal-decision').style.display = 'block';
-                    } else if (esModoLocal && turno !== miColorIdx) { // Bot auto-acopla
+                    } else if (esModoLocal && turno !== miColorIdx) { 
                         distribuirEvento({ tipo: 'ACOPLE', color: color, nuevaPos: nuevaPos, decision: true });
                     }
                 } else {
@@ -598,7 +593,6 @@
         }
 
         function finalizarMovimientoPasoTurno(color) {
-            // Solo quien movió evalúa qué pasa a continuación
             if (miColorIdx !== turno && !(esModoLocal && soyElHost)) return; 
             
             if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) {
