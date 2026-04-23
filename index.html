@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V4.2 (Ritmo Natural y Seguridad Lobby)</title>
+    <title>Ludo Family: Motor V5.0 (Sistema de Torneo y Revanchas)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -32,16 +32,25 @@
             z-index: 5; pointer-events: none; transform: translate(-50%, -50%);
         }
         
-        #area-juego { margin-top: 20px; text-align: center; width: 100%; max-width: 500px; }
+        #area-juego { margin-top: 20px; text-align: center; width: 100%; max-width: 600px; }
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
-        #indicador-turno { font-size: 22px; margin-bottom: 10px; font-weight: bold; padding: 10px; border-radius: 8px; }
+        #indicador-turno { font-size: 22px; margin-bottom: 10px; font-weight: bold; padding: 10px; border-radius: 8px; transition: background 0.3s; }
         
-        #seccion-clasificacion { margin-top: 25px; width: 100%; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; }
-        .puesto-item { display: flex; justify-content: space-between; padding: 10px 20px; margin: 5px 0; border-radius: 8px; background: #34495e; border-left: 10px solid transparent; }
-        
-        .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; border-radius: 5px; border: none; font-weight: bold; }
+        /* Contenedores de botones renovados */
+        #controles-juego { display: flex; justify-content: space-between; align-items: center; padding: 10px; }
+        .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; border-radius: 8px; border: none; font-weight: bold; transition: opacity 0.2s; }
+        .btn:active { opacity: 0.8; }
         .btn-grande { padding: 15px 30px; font-size: 18px; display: block; width: 100%; max-width: 300px; margin: 10px auto; }
+        
+        /* Botón Dado tipo Píldora */
+        .btn-pildora { padding: 15px 35px; font-size: 18px; border-radius: 30px; }
+        
         #botones-colores .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        /* Tablas Duales */
+        #contenedor-tablas { display: flex; gap: 15px; justify-content: space-between; margin-top: 20px; flex-wrap: wrap; }
+        .seccion-tabla { flex: 1; min-width: 250px; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; }
+        .puesto-item { display: flex; justify-content: space-between; padding: 10px 15px; margin: 5px 0; border-radius: 8px; background: #34495e; border-left: 8px solid transparent; }
         
         #alerta-flotante { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #e74c3c; padding: 15px 30px; border-radius: 8px; z-index: 2000; font-weight: bold; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
 
@@ -61,7 +70,10 @@
     <div id="modal-ganador">
         <h2 style="color: #f1c40f; font-size: 30px; margin-top: 0;">¡Partida Terminada!</h2>
         <h3 id="texto-ganador" style="color: white; font-size: 20px; line-height: 1.5;"></h3>
-        <button class="btn" style="background: #3498db; color: white; margin-top: 25px; width: 100%;" onclick="cerrarModalGanador()">Ver Tablero Final</button>
+        <div style="display: flex; gap: 10px; margin-top: 25px;">
+            <button class="btn" style="flex: 1; background: #e67e22; color: white;" onclick="solicitarRevancha()">Jugar Revancha</button>
+            <button class="btn" style="flex: 1; background: #3498db; color: white;" onclick="cerrarModalGanador()">Ver Tablero</button>
+        </div>
     </div>
 
     <div id="capa-lobby" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
@@ -118,13 +130,23 @@
             <span id="texto-turno">Esperando Configuración...</span>
             <span id="temporizador-ui" style="float: right;">⏱</span>
         </div>
+        
         <img id="dado-img" src="" alt="Dado">
-        <br>
-        <button id="btn-lanzar" class="btn" style="background-color: #27ae60; color: white;" onclick="intentarLanzarDado()" disabled>Lanzar Dado</button>
-        <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Abandonar Partida</button>
-        <div id="seccion-clasificacion">
-            <h3 style="margin-top: 0;">Tabla de Posiciones</h3>
-            <div id="lista-clasificacion"></div>
+        
+        <div id="controles-juego">
+            <button id="btn-lanzar" class="btn btn-pildora" style="background-color: #27ae60; color: white;" onclick="intentarLanzarDado()" disabled>Lanzar Dado</button>
+            <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Abandonar</button>
+        </div>
+
+        <div id="contenedor-tablas">
+            <div class="seccion-tabla">
+                <h3 style="margin-top: 0;">Ronda Actual</h3>
+                <div id="lista-clasificacion"></div>
+            </div>
+            <div class="seccion-tabla">
+                <h3 style="margin-top: 0; color: #f1c40f;">Ranking Torneo 🏆</h3>
+                <div id="lista-torneo"></div>
+            </div>
         </div>
     </div>
 
@@ -140,17 +162,11 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         
-        let partidaRef; 
-        let salaRef;
-        let jugadoresRef;
+        let partidaRef; let salaRef; let jugadoresRef;
+        let modoJuego = ''; let esModoLocal = false; 
         
-        let modoJuego = ''; 
-        let esModoLocal = false; 
-        
-        let miColorIdx = null; 
-        let apodo = "";
-        let coloresActivos = []; 
-        let nombresJugadores = {}; 
+        let miColorIdx = null; let apodo = "";
+        let coloresActivos = []; let nombresJugadores = {}; 
         let soyElHost = false;   
         
         const urlParams = new URLSearchParams(window.location.search);
@@ -162,25 +178,17 @@
 
         function mostrarAlerta(mensaje) {
             const alerta = document.getElementById('alerta-flotante');
-            alerta.innerText = mensaje;
-            alerta.style.display = 'block';
+            alerta.innerText = mensaje; alerta.style.display = 'block';
             setTimeout(() => alerta.style.display = 'none', 3000);
         }
 
         // --- FLUJO DEL LOBBY MULTI-MODO ---
         function seleccionarModoJuego(modo) {
-            modoJuego = modo;
-            esModoLocal = (modo === 'local');
+            modoJuego = modo; esModoLocal = (modo === 'local');
             document.getElementById('paso-0').style.display = 'none';
             document.getElementById('paso-1').style.display = 'block';
-            
-            if (esModoLocal) {
-                document.getElementById('controles-local').style.display = 'block';
-            } else {
-                document.getElementById('controles-online').style.display = 'block';
-                salaRef = db.ref('salas/' + idSala);
-                jugadoresRef = salaRef.child('jugadores');
-            }
+            if (esModoLocal) document.getElementById('controles-local').style.display = 'block';
+            else { document.getElementById('controles-online').style.display = 'block'; salaRef = db.ref('salas/' + idSala); jugadoresRef = salaRef.child('jugadores'); }
         }
 
         function validarNick() {
@@ -188,13 +196,8 @@
             if (apodo.length < 2) return alert("Por favor, escribe un apodo válido.");
             document.getElementById('paso-1').style.display = 'none';
             document.getElementById('paso-2').style.display = 'block';
-            
-            if (esModoLocal) {
-                document.getElementById('info-sala').innerText = "Partida Local";
-            } else {
-                document.getElementById('info-sala').innerText = "Sala Online: " + idSala;
-                escucharJugadoresLobbyOnline();
-            }
+            if (esModoLocal) document.getElementById('info-sala').innerText = "Partida Local";
+            else { document.getElementById('info-sala').innerText = "Sala Online: " + idSala; escucharJugadoresLobbyOnline(); }
         }
 
         function escucharJugadoresLobbyOnline() {
@@ -214,65 +217,36 @@
                 }
             });
             salaRef.child('estado').on('value', (snapshot) => {
-                if (snapshot.val() === 'jugando') {
-                    document.getElementById('capa-lobby').style.display = 'none';
-                    conectarMotorAFirebase();
-                }
+                if (snapshot.val() === 'jugando') { document.getElementById('capa-lobby').style.display = 'none'; conectarMotorAFirebase(); }
             });
         }
 
         function elegirColor(idx) {
             miColorIdx = idx;
-            if (!esModoLocal) {
-                jugadoresRef.push({ nick: apodo, colorIdx: idx });
-                document.getElementById('botones-colores').style.display = 'none';
-                document.getElementById('msg-espera').innerText = "Esperando inicio...";
-            } else {
-                document.getElementById('botones-colores').style.display = 'none';
-            }
+            if (!esModoLocal) { jugadoresRef.push({ nick: apodo, colorIdx: idx }); document.getElementById('botones-colores').style.display = 'none'; document.getElementById('msg-espera').innerText = "Esperando inicio..."; } 
+            else { document.getElementById('botones-colores').style.display = 'none'; }
         }
 
-        // Inicio Online
         function iniciarPartidaOnline() {
             jugadoresRef.once('value').then(snapshot => {
                 const jugadores = snapshot.val() || {};
                 let activos = []; let nicksMap = {};
                 Object.values(jugadores).forEach(j => { activos.push(j.colorIdx); nicksMap[j.colorIdx] = j.nick; });
                 activos.sort((a,b) => a-b);
-                db.ref('salas/' + idSala + '/partida/ultimoEvento').set({
-                    id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0]
-                }).then(() => { salaRef.update({ estado: 'jugando' }); });
+                db.ref('salas/' + idSala + '/partida/ultimoEvento').set({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] }).then(() => { salaRef.update({ estado: 'jugando' }); });
             });
         }
 
-        // Inicio Local
         function iniciarPartidaLocal(numJugadores) {
-            // FRENO DE SEGURIDAD PARA EL BUG DE COLOR VACÍO
-            if (miColorIdx === null) {
-                mostrarAlerta("¡Debes seleccionar tu color primero!");
-                return;
-            }
+            if (miColorIdx === null) return mostrarAlerta("¡Debes seleccionar tu color primero!");
+            let activos = []; let nicksMap = {}; let nombresBots = ['Carlos', 'David', 'Luis']; let bIndex = 0;
+            activos.push(miColorIdx); nicksMap[miColorIdx] = apodo;
 
-            let activos = [];
-            let nicksMap = {};
-            let nombresBots = ['Carlos', 'David', 'Luis'];
-            let bIndex = 0;
-
-            activos.push(miColorIdx);
-            nicksMap[miColorIdx] = apodo;
-
-            if (numJugadores === 2) {
-                let opuesto = (miColorIdx + 2) % 4; // Color de enfrente
-                activos.push(opuesto);
-                nicksMap[opuesto] = nombresBots[0];
-            } else {
-                for (let i = 0; i < 4; i++) {
-                    if (i !== miColorIdx) { activos.push(i); nicksMap[i] = nombresBots[bIndex++]; }
-                }
-            }
+            if (numJugadores === 2) { let opuesto = (miColorIdx + 2) % 4; activos.push(opuesto); nicksMap[opuesto] = nombresBots[0]; } 
+            else { for (let i = 0; i < 4; i++) { if (i !== miColorIdx) { activos.push(i); nicksMap[i] = nombresBots[bIndex++]; } } }
+            
             activos.sort((a,b) => a-b);
             document.getElementById('capa-lobby').style.display = 'none';
-            
             distribuirEvento({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] });
         }
 
@@ -293,41 +267,28 @@
 
         function distribuirEvento(datos) {
             datos.id = Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-            if (esModoLocal) {
-                setTimeout(() => procesarEventoRemoto(datos), 50);
-            } else {
-                if (!partidaRef) return;
-                partidaRef.child('ultimoEvento').set(datos);
-            }
+            if (esModoLocal) setTimeout(() => procesarEventoRemoto(datos), 50);
+            else { if (!partidaRef) return; partidaRef.child('ultimoEvento').set(datos); }
         }
 
         function procesarEventoRemoto(ev) {
             switch(ev.tipo) {
                 case 'START':
-                    coloresActivos = ev.activos;
-                    nombresJugadores = ev.nicksMap || {};
-                    turno = ev.turnoInicial;
-                    soyElHost = true; 
-                    
-                    codigosColor.forEach(c => {
-                        if (!coloresActivos.includes(codigosColor.indexOf(c))) {
-                            for(let i=0; i<4; i++) { let f = document.getElementById(`${c}-${i}`); if(f) f.style.display = 'none'; }
-                        }
-                    });
+                    coloresActivos = ev.activos; nombresJugadores = ev.nicksMap || {}; turno = ev.turnoInicial; soyElHost = true; 
+                    // Iniciar puntos del torneo
+                    codigosColor.forEach(c => puntosTorneo[c] = 0);
+                    actualizarTablaTorneo();
+                    codigosColor.forEach(c => { if (!coloresActivos.includes(codigosColor.indexOf(c))) { for(let i=0; i<4; i++) { let f = document.getElementById(`${c}-${i}`); if(f) f.style.display = 'none'; } } });
                     reiniciarTurnoVisual();
                     break;
                 case 'DADO':
-                    valorDado = ev.valor;
-                    document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
-                    document.getElementById('dado-img').style.display = 'inline-block';
-                    document.getElementById('btn-lanzar').disabled = true;
+                    valorDado = ev.valor; document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`; document.getElementById('dado-img').style.display = 'inline-block'; document.getElementById('btn-lanzar').disabled = true;
                     evaluarOpcionesDespuesDelDado();
                     break;
                 case 'REINTENTO_DADO':
                     valorDado = 0; document.getElementById('dado-img').style.display = 'none';
                     if (miColorIdx === turno) document.getElementById('btn-lanzar').disabled = false;
                     limiteTurnoMs = Date.now() + 30000; 
-                    // Ritmo de Bot Ajustado a 2.5s
                     if (esModoLocal && turno !== miColorIdx) setTimeout(intentarLanzarDado, 2500); 
                     break;
                 case 'MOVER': ejecutarMovimientoLocal(ev.color, ev.fichaIdx); break;
@@ -337,10 +298,11 @@
                     break;
                 case 'PASAR_TURNO':
                     turno = ev.siguienteTurno; intentosSalida = 0; valorDado = 0;
-                    document.getElementById('dado-img').style.display = 'none';
-                    document.getElementById('modal-decision').style.display = 'none';
-                    decisionPendiente = null;
+                    document.getElementById('dado-img').style.display = 'none'; document.getElementById('modal-decision').style.display = 'none'; decisionPendiente = null;
                     reiniciarTurnoVisual();
+                    break;
+                case 'REVANCHA':
+                    ejecutarLimpiezaRevancha(ev.primerTurno);
                     break;
             }
         }
@@ -353,50 +315,36 @@
             for (let i = 0; i < 4; i++) {
                 let pos = estadoFichas[color][i];
                 if (pos >= rutas[color].length - 1) continue; 
-                
-                if (pos === -1 && (valorDado === 1 || valorDado === 6)) {
-                    opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
-                } else if (pos > -1) {
+                if (pos === -1 && (valorDado === 1 || valorDado === 6)) opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
+                else if (pos > -1) {
                     let np = pos + valorDado;
                     if (np >= rutas[color].length) np = (rutas[color].length - 1) - (np - (rutas[color].length - 1));
                     opciones.push({ idx: i, accion: 'mover', posActual: pos, nuevaPos: np });
                 }
             }
-
             if (opciones.length > 0) {
                 let eleccion = opciones[0]; 
-                
                 let salida = opciones.find(o => o.accion === 'salir');
                 let cazador = opciones.find(o => compruebaCapturaSimulada(color, o.nuevaPos));
-                
                 if (salida) eleccion = salida; 
                 else if (cazador) eleccion = cazador; 
-                else {
-                    opciones.sort((a,b) => b.posActual - a.posActual);
-                    eleccion = opciones[0];
-                }
-                
+                else { opciones.sort((a,b) => b.posActual - a.posActual); eleccion = opciones[0]; }
                 distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: eleccion.idx });
             }
         }
 
         function compruebaCapturaSimulada(color, posActual) {
-            const posCoords = rutas[color][posActual];
-            const margen = 2.0;
+            const posCoords = rutas[color][posActual]; const margen = 2.0;
             let esZonaSegura = codigosColor.some(c => { let est = rutas[c][COORDENADA_SALIDA]; return Math.abs(est[0] - posCoords[0]) < margen && Math.abs(est[1] - posCoords[1]) < margen; });
             if (esZonaSegura) return false;
-
             for (let c of codigosColor) {
                 if (c === color) continue;
                 for (let p of estadoFichas[c]) {
                     if (p === -1 || p >= rutas[c].length - 1) continue;
                     let pEnemigo = rutas[c][p];
-                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
-                        return true; 
-                    }
+                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) return true; 
                 }
-            }
-            return false;
+            } return false;
         }
 
         // ==========================================
@@ -405,6 +353,8 @@
         let turno = 0; let valorDado = 0; let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = []; let grupos = {}; 
+        let puntosTorneo = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 }; // NUEVO: Registro Global
+
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
         const COORDENADA_SALIDA = 4;
@@ -426,29 +376,33 @@
             if (clasificacion.length >= objetivoMeta) return; 
             
             let nickActual = nombresJugadores[turno] || colores[turno];
-            document.getElementById('indicador-turno').innerHTML = `<span>Turno: ${nickActual}</span><span id="temporizador-ui" style="float: right;">⏱</span>`;
+            
+            // NUEVO: Contraste inteligente para el Amarillo (1)
+            let colorTexto = (turno === 1) ? '#2c3e50' : 'white';
+            
+            document.getElementById('indicador-turno').innerHTML = `<span style="color:${colorTexto}">Turno: ${nickActual}</span><span id="temporizador-ui" style="float: right; color:${colorTexto}">⏱</span>`;
             document.getElementById('indicador-turno').style.backgroundColor = codigosColor[turno];
             
             document.getElementById('btn-lanzar').disabled = (miColorIdx !== turno);
             actualizarEventosClic();
             
             limiteTurnoMs = Date.now() + 30000;
-            iniciarTemporizador();
+            iniciarTemporizador(colorTexto);
 
-            // Ritmo de Bot Ajustado a 2.5s
-            if (esModoLocal && turno !== miColorIdx) {
-                setTimeout(intentarLanzarDado, 2500); 
-            }
+            if (esModoLocal && turno !== miColorIdx) { setTimeout(intentarLanzarDado, 2500); }
         }
 
-        function iniciarTemporizador() {
+        function iniciarTemporizador(colorOriginal) {
             clearInterval(intervaloTemporizador);
             intervaloTemporizador = setInterval(() => {
                 let tiempoRestante = Math.ceil((limiteTurnoMs - Date.now()) / 1000);
                 if (tiempoRestante < 0) tiempoRestante = 0;
                 
                 const tempUI = document.getElementById('temporizador-ui');
-                if (tempUI) { tempUI.innerText = `⏱ ${tiempoRestante}s`; tempUI.style.color = tiempoRestante <= 5 ? '#ffcccb' : 'white'; }
+                if (tempUI) { 
+                    tempUI.innerText = `⏱ ${tiempoRestante}s`; 
+                    tempUI.style.color = tiempoRestante <= 5 ? '#e74c3c' : colorOriginal; 
+                }
                 
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
@@ -463,8 +417,7 @@
             let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
             if (clasificacion.length >= objetivoMeta) return;
 
-            let proxTurno = turno;
-            let turnosBuscados = 0;
+            let proxTurno = turno; let turnosBuscados = 0;
             do { proxTurno = (proxTurno + 1) % 4; turnosBuscados++; } 
             while ((!coloresActivos.includes(proxTurno) || clasificacion.includes(codigosColor[proxTurno])) && turnosBuscados < 4);
             
@@ -473,7 +426,6 @@
 
         function intentarLanzarDado() {
             if (turno !== miColorIdx && !(esModoLocal && turno !== miColorIdx)) return;
-            
             let valor = Math.floor(Math.random() * 6) + 1;
             distribuirEvento({ tipo: 'DADO', valor: valor }); 
         }
@@ -490,10 +442,7 @@
                 }
             } else {
                 actualizarEventosClic();
-                // Ritmo de Bot Ajustado a 2.5s
-                if (esModoLocal && turno !== miColorIdx) {
-                    setTimeout(() => ejecutarCerebroBot(actual), 2500);
-                }
+                if (esModoLocal && turno !== miColorIdx) { setTimeout(() => ejecutarCerebroBot(actual), 2500); }
             }
         }
 
@@ -505,7 +454,7 @@
         }
 
         // ==========================================
-        // LA MATEMÁTICA PURA & LOGICA DE FINALIZACIÓN
+        // MATEMÁTICA PURA Y CIERRE DE PARTIDA
         // ==========================================
         function ejecutarMovimientoLocal(color, i) {
             let grupoKey = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
@@ -524,7 +473,7 @@
                 
                 if (fichasEnMeta[color] >= 4 && !clasificacion.includes(color)) {
                     clasificacion.push(color);
-                    actualizarClasificacion();
+                    actualizarClasificacionRonda();
                 }
                 
                 actualizarDistintivos();
@@ -532,7 +481,7 @@
                 
                 if (clasificacion.length >= objetivoMeta) {
                     let ultimo = codigosColor.find((c, idx) => coloresActivos.includes(idx) && !clasificacion.includes(c));
-                    if(ultimo && !clasificacion.includes(ultimo)) { clasificacion.push(ultimo); actualizarClasificacion(); }
+                    if(ultimo && !clasificacion.includes(ultimo)) { clasificacion.push(ultimo); actualizarClasificacionRonda(); }
                     mostrarPantallaFinal();
                 } else { finalizarMovimientoPasoTurno(color); }
 
@@ -566,13 +515,16 @@
         }
 
         // ==========================================
-        // LA PANTALLA DE VICTORIA Y UTILIDADES
+        // TABLAS Y TORNEO (NUEVO)
         // ==========================================
         function mostrarPantallaFinal() {
             detenerTemporizador();
             document.getElementById('indicador-turno').innerHTML = `<span style="color:#f1c40f;">¡PARTIDA FINALIZADA!</span>`;
             document.getElementById('indicador-turno').style.backgroundColor = '#2c3e50';
             document.getElementById('btn-lanzar').disabled = true;
+
+            // Repartir puntos de torneo localmente
+            calcularPuntosTorneo();
 
             let ganadorColor = clasificacion[0];
             let idxGanador = codigosColor.indexOf(ganadorColor);
@@ -582,55 +534,111 @@
             document.getElementById('modal-ganador').style.display = 'block';
         }
 
-        function cerrarModalGanador() { document.getElementById('modal-ganador').style.display = 'none'; }
-
-        function responderModalAcople(quiereAcoplar) {
-            if (!decisionPendiente) return;
-            distribuirEvento({ tipo: 'ACOPLE', color: decisionPendiente.color, nuevaPos: decisionPendiente.nuevaPos, decision: quiereAcoplar });
+        function calcularPuntosTorneo() {
+            // Estructura de Pago: 1ero 25, 2do 15, 3ero 10, 4to 5
+            const premios = [25, 15, 10, 5];
+            clasificacion.forEach((colorGanador, posicion) => {
+                if(premios[posicion]) {
+                    puntosTorneo[colorGanador] += premios[posicion];
+                }
+            });
+            actualizarTablaTorneo();
         }
 
-        function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
-            let todasEnDestino = [];
-            estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
+        function actualizarClasificacionRonda() {
+            const lista = document.getElementById('lista-clasificacion'); lista.innerHTML = "";
+            clasificacion.forEach((color, index) => {
+                const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderLeftColor = color;
+                let idxColor = codigosColor.indexOf(color); let nickAMostrar = nombresJugadores[idxColor] || color;
+                item.innerHTML = `<span>#${index + 1} Lugar</span> <span style="color:${color}; font-weight:bold;">${nickAMostrar.toUpperCase()}</span>`;
+                lista.appendChild(item);
+            });
+        }
+
+        function actualizarTablaTorneo() {
+            const lista = document.getElementById('lista-torneo'); lista.innerHTML = "";
+            // Ordenar colores activos por puntos de mayor a menor
+            let ranking = coloresActivos.map(idx => codigosColor[idx]);
+            ranking.sort((a, b) => puntosTorneo[b] - puntosTorneo[a]);
+
+            ranking.forEach((color, index) => {
+                const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderLeftColor = color;
+                let idxColor = codigosColor.indexOf(color); let nickAMostrar = nombresJugadores[idxColor] || color;
+                item.innerHTML = `<span>${nickAMostrar.toUpperCase()}</span> <span style="color:#f1c40f; font-weight:bold;">${puntosTorneo[color]} pts</span>`;
+                lista.appendChild(item);
+            });
+        }
+
+        // ==========================================
+        // LA REVANCHA (NUEVO)
+        // ==========================================
+        function solicitarRevancha() {
+            let ganadorPrevio = codigosColor.indexOf(clasificacion[0]);
+            distribuirEvento({ tipo: 'REVANCHA', primerTurno: ganadorPrevio });
+        }
+
+        function ejecutarLimpiezaRevancha(primerTurno) {
+            // 1. Limpiar Variables
+            codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
+            fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
+            clasificacion = []; grupos = {}; intentosSalida = 0; valorDado = 0;
             
-            if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
-            verificarCaptura(color, nuevaPos);
-            actualizarDistintivos();
-            finalizarMovimientoPasoTurno(color);
+            // 2. Limpiar Interfaz
+            document.getElementById('dado-img').style.display = 'none';
+            document.getElementById('modal-ganador').style.display = 'none';
+            actualizarClasificacionRonda(); // Vacia la tabla 1
+            actualizarDistintivos(); // Borra badges
+            
+            // 3. Devolver fichas a bases
+            codigosColor.forEach(c => {
+                actualizarMetaUI(c);
+                for(let i=0; i<4; i++) {
+                    let f = document.getElementById(`${c}-${i}`);
+                    if(f && coloresActivos.includes(codigosColor.indexOf(c))) {
+                        f.style.top = f.dataset.baseX + "%";
+                        f.style.left = f.dataset.baseY + "%";
+                        f.style.display = 'flex';
+                    }
+                }
+            });
+
+            // 4. Arrancar de nuevo premiando al ganador
+            turno = primerTurno !== undefined ? primerTurno : coloresActivos[0];
+            reiniciarTurnoVisual();
         }
 
+        // ==========================================
+        // OTRAS FUNCIONES (MANTENIDAS)
+        // ==========================================
+        function cerrarModalGanador() { document.getElementById('modal-ganador').style.display = 'none'; }
+        function responderModalAcople(quiereAcoplar) { if (!decisionPendiente) return; distribuirEvento({ tipo: 'ACOPLE', color: decisionPendiente.color, nuevaPos: decisionPendiente.nuevaPos, decision: quiereAcoplar }); }
+        function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
+            let todasEnDestino = []; estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
+            if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
+            verificarCaptura(color, nuevaPos); actualizarDistintivos(); finalizarMovimientoPasoTurno(color);
+        }
         function finalizarMovimientoPasoTurno(color) {
             if (miColorIdx !== turno && !(esModoLocal && soyElHost)) return; 
-            
-            if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) {
-                setTimeout(() => calcularSiguienteTurnoYEnviar(), 500);
-            } else {
-                setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 500);
-            }
+            if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) { setTimeout(() => calcularSiguienteTurnoYEnviar(), 500); } 
+            else { setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 500); }
         }
-
         function verificarCaptura(colorJugador, posActual) {
-            const posCoords = rutas[colorJugador][posActual];
-            const margen = 2.0; 
+            const posCoords = rutas[colorJugador][posActual]; const margen = 2.0; 
             let esZonaSegura = codigosColor.some(c => { let estrella = rutas[c][COORDENADA_SALIDA]; return Math.abs(estrella[0] - posCoords[0]) < margen && Math.abs(estrella[1] - posCoords[1]) < margen; });
             if (esZonaSegura) return;
-            
             codigosColor.forEach(c => {
                 if (c === colorJugador) return;
                 estadoFichas[c].forEach((p, idx) => {
                     if (p === -1 || p >= rutas[c].length - 1) return;
                     let pEnemigo = rutas[c][p];
                     if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
-                        estadoFichas[c][idx] = -1;
-                        const fichaDefensora = document.getElementById(`${c}-${idx}`);
-                        fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%";
-                        fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
+                        estadoFichas[c][idx] = -1; const fichaDefensora = document.getElementById(`${c}-${idx}`);
+                        fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%"; fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
                         Object.keys(grupos).forEach(key => { if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key]; });
                     }
                 });
             });
         }
-
         function actualizarEventosClic() {
             codigosColor.forEach(c => {
                 for (let i = 0; i < 4; i++) {
@@ -639,36 +647,6 @@
                 }
             });
         }
-
-        function actualizarDistintivos() {
-            document.querySelectorAll('.badge-grupo').forEach(b => b.remove());
-            Object.keys(grupos).forEach(key => {
-                if (grupos[key].length > 1) {
-                    grupos[key].forEach(idFicha => {
-                        const ficha = document.getElementById(idFicha);
-                        if (ficha) {
-                            const badge = document.createElement('div');
-                            badge.className = 'badge-grupo'; badge.innerText = grupos[key].length;
-                            ficha.appendChild(badge);
-                        }
-                    });
-                }
-            });
-        }
-
-        function actualizarMetaUI(color) { const el = document.getElementById(`ui-${color}`); el.innerText = fichasEnMeta[color] > 0 ? fichasEnMeta[color] : ""; }
-        
-        function actualizarClasificacion() {
-            const lista = document.getElementById('lista-clasificacion'); lista.innerHTML = "";
-            clasificacion.forEach((color, index) => {
-                const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderColor = color;
-                let idxColor = codigosColor.indexOf(color);
-                let nickAMostrar = nombresJugadores[idxColor] || color;
-                item.innerHTML = `<span>#${index + 1} Lugar</span> <span style="color:${color}; font-weight:bold;">${nickAMostrar.toUpperCase()}</span>`;
-                lista.appendChild(item);
-            });
-        }
-
         function crearFichasBase(lista, color) {
             const contenedor = document.getElementById('contenedor-tablero');
             lista.slice(0, 4).forEach((coord, i) => {
@@ -676,19 +654,16 @@
                 ficha.className = 'ficha'; ficha.style.backgroundColor = color;
                 ficha.style.top = coord[0] + "%"; ficha.style.left = coord[1] + "%";
                 ficha.dataset.baseX = coord[0]; ficha.dataset.baseY = coord[1];
-                ficha.id = `${color}-${i}`; 
-                ficha.onclick = () => intentarMovimientoFicha(color, i);
+                ficha.id = `${color}-${i}`; ficha.onclick = () => intentarMovimientoFicha(color, i);
                 contenedor.appendChild(ficha);
             });
         }
-
         function reiniciarJuego() { 
-            if (confirm("¿Abandonar partida?")) { 
+            if (confirm("¿Abandonar partida perdiendo el progreso?")) { 
                 if(!esModoLocal) salaRef.remove().then(() => { location.search = ""; });
                 else location.search = "";
             } 
         }
-
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
     </script>
 </body>
