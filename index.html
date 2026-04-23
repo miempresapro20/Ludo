@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V5.0 (Sistema de Torneo y Revanchas)</title>
+    <title>Ludo Family: Motor V5.1 (Gráficas de Acople Restauradas)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -36,18 +36,13 @@
         #dado-img { width: 80px; height: 80px; margin: 10px; display: none; }
         #indicador-turno { font-size: 22px; margin-bottom: 10px; font-weight: bold; padding: 10px; border-radius: 8px; transition: background 0.3s; }
         
-        /* Contenedores de botones renovados */
         #controles-juego { display: flex; justify-content: space-between; align-items: center; padding: 10px; }
         .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; border-radius: 8px; border: none; font-weight: bold; transition: opacity 0.2s; }
         .btn:active { opacity: 0.8; }
         .btn-grande { padding: 15px 30px; font-size: 18px; display: block; width: 100%; max-width: 300px; margin: 10px auto; }
-        
-        /* Botón Dado tipo Píldora */
         .btn-pildora { padding: 15px 35px; font-size: 18px; border-radius: 30px; }
-        
         #botones-colores .btn:disabled { opacity: 0.3; cursor: not-allowed; }
         
-        /* Tablas Duales */
         #contenedor-tablas { display: flex; gap: 15px; justify-content: space-between; margin-top: 20px; flex-wrap: wrap; }
         .seccion-tabla { flex: 1; min-width: 250px; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; }
         .puesto-item { display: flex; justify-content: space-between; padding: 10px 15px; margin: 5px 0; border-radius: 8px; background: #34495e; border-left: 8px solid transparent; }
@@ -78,17 +73,14 @@
 
     <div id="capa-lobby" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
         <h2>Ludo Family</h2>
-        
         <div id="paso-0">
             <button class="btn btn-grande" style="background: #8e44ad; color: white;" onclick="seleccionarModoJuego('local')">🕹️ JUGAR MODO LOCAL</button>
             <button class="btn btn-grande" style="background: #2980b9; color: white;" onclick="seleccionarModoJuego('online')">🌐 JUGAR ONLINE</button>
         </div>
-
         <div id="paso-1" style="display: none;">
             <input type="text" id="input-nick" placeholder="Tu Apodo" style="padding: 10px; font-size: 18px; border-radius: 5px; border: none; width: 250px; text-align: center;"><br><br>
             <button class="btn" style="background: #3498db; color: white;" onclick="validarNick()">Siguiente</button>
         </div>
-
         <div id="paso-2" style="display: none;">
             <p id="info-sala" style="color: #f1c40f; font-weight: bold; font-size: 20px;"></p>
             <p>Selecciona tu color:</p>
@@ -98,7 +90,6 @@
                 <button id="btn-color-2" class="btn" onclick="elegirColor(2)" style="background: blue; color: white;">Azul</button>
                 <button id="btn-color-3" class="btn" onclick="elegirColor(3)" style="background: red; color: white;">Rojo</button>
             </div>
-            
             <div id="controles-online" style="display: none;">
                 <p id="msg-espera" style="margin-top: 20px; font-style: italic; color: #bdc3c7;"></p>
                 <button id="btn-iniciar-partida" class="btn" style="display: none; background: #27ae60; color: white; margin-top: 15px;" onclick="iniciarPartidaOnline()">¡COMENZAR JUEGO!</button>
@@ -107,7 +98,6 @@
                     <input type="text" id="link-compartir" readonly style="width: 100%; padding: 8px; font-size: 12px; border-radius: 4px; border: none; text-align: center; color: #333;" onclick="this.select()">
                 </div>
             </div>
-
             <div id="controles-local" style="display: none; margin-top: 20px;">
                 <p>¿Cuántos jugadores participarán?</p>
                 <button class="btn" style="background: #27ae60; color: white;" onclick="iniciarPartidaLocal(2)">2 Jugadores</button>
@@ -275,7 +265,6 @@
             switch(ev.tipo) {
                 case 'START':
                     coloresActivos = ev.activos; nombresJugadores = ev.nicksMap || {}; turno = ev.turnoInicial; soyElHost = true; 
-                    // Iniciar puntos del torneo
                     codigosColor.forEach(c => puntosTorneo[c] = 0);
                     actualizarTablaTorneo();
                     codigosColor.forEach(c => { if (!coloresActivos.includes(codigosColor.indexOf(c))) { for(let i=0; i<4; i++) { let f = document.getElementById(`${c}-${i}`); if(f) f.style.display = 'none'; } } });
@@ -353,7 +342,7 @@
         let turno = 0; let valorDado = 0; let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = []; let grupos = {}; 
-        let puntosTorneo = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 }; // NUEVO: Registro Global
+        let puntosTorneo = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 }; 
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -376,8 +365,6 @@
             if (clasificacion.length >= objetivoMeta) return; 
             
             let nickActual = nombresJugadores[turno] || colores[turno];
-            
-            // NUEVO: Contraste inteligente para el Amarillo (1)
             let colorTexto = (turno === 1) ? '#2c3e50' : 'white';
             
             document.getElementById('indicador-turno').innerHTML = `<span style="color:${colorTexto}">Turno: ${nickActual}</span><span id="temporizador-ui" style="float: right; color:${colorTexto}">⏱</span>`;
@@ -399,10 +386,7 @@
                 if (tiempoRestante < 0) tiempoRestante = 0;
                 
                 const tempUI = document.getElementById('temporizador-ui');
-                if (tempUI) { 
-                    tempUI.innerText = `⏱ ${tiempoRestante}s`; 
-                    tempUI.style.color = tiempoRestante <= 5 ? '#e74c3c' : colorOriginal; 
-                }
+                if (tempUI) { tempUI.innerText = `⏱ ${tiempoRestante}s`; tempUI.style.color = tiempoRestante <= 5 ? '#e74c3c' : colorOriginal; }
                 
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
@@ -476,7 +460,7 @@
                     actualizarClasificacionRonda();
                 }
                 
-                actualizarDistintivos();
+                actualizarDistintivos(); 
                 let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
                 
                 if (clasificacion.length >= objetivoMeta) {
@@ -499,6 +483,9 @@
                 let todasEnDestino = [];
                 estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
 
+                // --- ARREGLO V5.1: Dibujamos inmediatamente si se desarmó un grupo ---
+                actualizarDistintivos();
+
                 if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
                     if (miColorIdx === turno) { 
                         decisionPendiente = { color, nuevaPos, todasEnDestino };
@@ -509,13 +496,17 @@
                 } else {
                     if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
                     verificarCaptura(color, nuevaPos);
+                    
+                    // --- ARREGLO V5.1: Damos la orden de dibujar de nuevo los números tras una captura o acople normal ---
+                    actualizarDistintivos();
+                    
                     finalizarMovimientoPasoTurno(color);
                 }
             }
         }
 
         // ==========================================
-        // TABLAS Y TORNEO (NUEVO)
+        // TABLAS Y TORNEO 
         // ==========================================
         function mostrarPantallaFinal() {
             detenerTemporizador();
@@ -523,7 +514,6 @@
             document.getElementById('indicador-turno').style.backgroundColor = '#2c3e50';
             document.getElementById('btn-lanzar').disabled = true;
 
-            // Repartir puntos de torneo localmente
             calcularPuntosTorneo();
 
             let ganadorColor = clasificacion[0];
@@ -535,12 +525,9 @@
         }
 
         function calcularPuntosTorneo() {
-            // Estructura de Pago: 1ero 25, 2do 15, 3ero 10, 4to 5
             const premios = [25, 15, 10, 5];
             clasificacion.forEach((colorGanador, posicion) => {
-                if(premios[posicion]) {
-                    puntosTorneo[colorGanador] += premios[posicion];
-                }
+                if(premios[posicion]) { puntosTorneo[colorGanador] += premios[posicion]; }
             });
             actualizarTablaTorneo();
         }
@@ -557,7 +544,6 @@
 
         function actualizarTablaTorneo() {
             const lista = document.getElementById('lista-torneo'); lista.innerHTML = "";
-            // Ordenar colores activos por puntos de mayor a menor
             let ranking = coloresActivos.map(idx => codigosColor[idx]);
             ranking.sort((a, b) => puntosTorneo[b] - puntosTorneo[a]);
 
@@ -570,7 +556,7 @@
         }
 
         // ==========================================
-        // LA REVANCHA (NUEVO)
+        // LA REVANCHA 
         // ==========================================
         function solicitarRevancha() {
             let ganadorPrevio = codigosColor.indexOf(clasificacion[0]);
@@ -578,18 +564,15 @@
         }
 
         function ejecutarLimpiezaRevancha(primerTurno) {
-            // 1. Limpiar Variables
             codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
             fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
             clasificacion = []; grupos = {}; intentosSalida = 0; valorDado = 0;
             
-            // 2. Limpiar Interfaz
             document.getElementById('dado-img').style.display = 'none';
             document.getElementById('modal-ganador').style.display = 'none';
-            actualizarClasificacionRonda(); // Vacia la tabla 1
-            actualizarDistintivos(); // Borra badges
+            actualizarClasificacionRonda(); 
+            actualizarDistintivos(); 
             
-            // 3. Devolver fichas a bases
             codigosColor.forEach(c => {
                 actualizarMetaUI(c);
                 for(let i=0; i<4; i++) {
@@ -602,20 +585,24 @@
                 }
             });
 
-            // 4. Arrancar de nuevo premiando al ganador
             turno = primerTurno !== undefined ? primerTurno : coloresActivos[0];
             reiniciarTurnoVisual();
         }
 
         // ==========================================
-        // OTRAS FUNCIONES (MANTENIDAS)
+        // OTRAS FUNCIONES DE UTILIDAD
         // ==========================================
         function cerrarModalGanador() { document.getElementById('modal-ganador').style.display = 'none'; }
         function responderModalAcople(quiereAcoplar) { if (!decisionPendiente) return; distribuirEvento({ tipo: 'ACOPLE', color: decisionPendiente.color, nuevaPos: decisionPendiente.nuevaPos, decision: quiereAcoplar }); }
         function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
             let todasEnDestino = []; estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
             if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
-            verificarCaptura(color, nuevaPos); actualizarDistintivos(); finalizarMovimientoPasoTurno(color);
+            verificarCaptura(color, nuevaPos); 
+            
+            // --- ARREGLO V5.1: Se actualiza tras pulsar en el modal de acople ---
+            actualizarDistintivos(); 
+            
+            finalizarMovimientoPasoTurno(color);
         }
         function finalizarMovimientoPasoTurno(color) {
             if (miColorIdx !== turno && !(esModoLocal && soyElHost)) return; 
@@ -647,6 +634,34 @@
                 }
             });
         }
+        function actualizarDistintivos() {
+            document.querySelectorAll('.badge-grupo').forEach(b => b.remove());
+            Object.keys(grupos).forEach(key => {
+                if (grupos[key].length > 1) {
+                    grupos[key].forEach(idFicha => {
+                        const ficha = document.getElementById(idFicha);
+                        if (ficha) {
+                            const badge = document.createElement('div');
+                            badge.className = 'badge-grupo'; badge.innerText = grupos[key].length;
+                            ficha.appendChild(badge);
+                        }
+                    });
+                }
+            });
+        }
+        function actualizarMetaUI(color) { const el = document.getElementById(`ui-${color}`); el.innerText = fichasEnMeta[color] > 0 ? fichasEnMeta[color] : ""; }
+        
+        function actualizarClasificacion() {
+            const lista = document.getElementById('lista-clasificacion'); lista.innerHTML = "";
+            clasificacion.forEach((color, index) => {
+                const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderLeftColor = color;
+                let idxColor = codigosColor.indexOf(color);
+                let nickAMostrar = nombresJugadores[idxColor] || color;
+                item.innerHTML = `<span>#${index + 1} Lugar</span> <span style="color:${color}; font-weight:bold;">${nickAMostrar.toUpperCase()}</span>`;
+                lista.appendChild(item);
+            });
+        }
+
         function crearFichasBase(lista, color) {
             const contenedor = document.getElementById('contenedor-tablero');
             lista.slice(0, 4).forEach((coord, i) => {
@@ -654,16 +669,19 @@
                 ficha.className = 'ficha'; ficha.style.backgroundColor = color;
                 ficha.style.top = coord[0] + "%"; ficha.style.left = coord[1] + "%";
                 ficha.dataset.baseX = coord[0]; ficha.dataset.baseY = coord[1];
-                ficha.id = `${color}-${i}`; ficha.onclick = () => intentarMovimientoFicha(color, i);
+                ficha.id = `${color}-${i}`; 
+                ficha.onclick = () => intentarMovimientoFicha(color, i);
                 contenedor.appendChild(ficha);
             });
         }
+
         function reiniciarJuego() { 
             if (confirm("¿Abandonar partida perdiendo el progreso?")) { 
                 if(!esModoLocal) salaRef.remove().then(() => { location.search = ""; });
                 else location.search = "";
             } 
         }
+
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
     </script>
 </body>
