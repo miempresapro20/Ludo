@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V5.3 (IA de Nivel Experto)</title>
+    <title>Ludo Family: Motor V6.0 (Reconexión y Piloto Automático)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -124,7 +124,7 @@
         <img id="dado-img" src="" alt="Dado">
         
         <div id="controles-juego">
-            <button id="btn-lanzar" class="btn btn-pildora" style="background-color: #27ae60; color: white;" onclick="intentarLanzarDado()" disabled>Lanzar Dado</button>
+            <button id="btn-lanzar" class="btn btn-pildora" style="background-color: #27ae60; color: white;" onclick="intentarLanzarDado(false)" disabled>Lanzar Dado</button>
             <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Abandonar</button>
         </div>
 
@@ -159,6 +159,9 @@
         let coloresActivos = []; let nombresJugadores = {}; 
         let soyElHost = false;   
         
+        // --- NUEVO: Piloto Automático y Rejoin ---
+        let strikesJugadores = {0:0, 1:0, 2:0, 3:0};
+
         const urlParams = new URLSearchParams(window.location.search);
         let idSala = urlParams.get('sala');
         if (!idSala) idSala = Math.floor(1000 + Math.random() * 9000).toString();
@@ -166,13 +169,40 @@
         const linkCompleto = window.location.origin + window.location.pathname + "?sala=" + idSala;
         document.getElementById('link-compartir').value = linkCompleto;
 
+        // --- SISTEMA DE TICKET (Reconexión Silenciosa) ---
+        window.onload = () => {
+            let savedToken = localStorage.getItem('ludo_token_' + idSala);
+            let savedColor = localStorage.getItem('ludo_color_' + idSala);
+            
+            if (savedToken && savedColor !== null) {
+                db.ref('salas/' + idSala + '/jugadores').once('value').then(snap => {
+                    let j = snap.val(); let found = false;
+                    if (j) {
+                        Object.values(j).forEach(jugador => {
+                            if (jugador.token === savedToken) {
+                                found = true; miColorIdx = parseInt(savedColor); apodo = jugador.nick;
+                            }
+                        });
+                    }
+                    if (found) {
+                        esModoLocal = false; 
+                        document.getElementById('paso-0').style.display = 'none';
+                        document.getElementById('capa-lobby').innerHTML = '<h2 style="color:#f1c40f">Reconectando a tu asiento...</h2>';
+                        conectarMotorAFirebase();
+                    } else {
+                        localStorage.removeItem('ludo_token_' + idSala);
+                        localStorage.removeItem('ludo_color_' + idSala);
+                    }
+                });
+            }
+        };
+
         function mostrarAlerta(mensaje) {
             const alerta = document.getElementById('alerta-flotante');
             alerta.innerText = mensaje; alerta.style.display = 'block';
             setTimeout(() => alerta.style.display = 'none', 3000);
         }
 
-        // --- FLUJO DEL LOBBY MULTI-MODO ---
         function seleccionarModoJuego(modo) {
             modoJuego = modo; esModoLocal = (modo === 'local');
             document.getElementById('paso-0').style.display = 'none';
@@ -213,8 +243,14 @@
 
         function elegirColor(idx) {
             miColorIdx = idx;
-            if (!esModoLocal) { jugadoresRef.push({ nick: apodo, colorIdx: idx }); document.getElementById('botones-colores').style.display = 'none'; document.getElementById('msg-espera').innerText = "Esperando inicio..."; } 
-            else { document.getElementById('botones-colores').style.display = 'none'; }
+            if (!esModoLocal) { 
+                let myToken = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                localStorage.setItem('ludo_token_' + idSala, myToken);
+                localStorage.setItem('ludo_color_' + idSala, idx);
+                jugadoresRef.push({ nick: apodo, colorIdx: idx, token: myToken }); 
+                document.getElementById('botones-colores').style.display = 'none'; 
+                document.getElementById('msg-espera').innerText = "Esperando inicio..."; 
+            } else { document.getElementById('botones-colores').style.display = 'none'; }
         }
 
         function iniciarPartidaOnline() {
@@ -223,7 +259,10 @@
                 let activos = []; let nicksMap = {};
                 Object.values(jugadores).forEach(j => { activos.push(j.colorIdx); nicksMap[j.colorIdx] = j.nick; });
                 activos.sort((a,b) => a-b);
-                db.ref('salas/' + idSala + '/partida/ultimoEvento').set({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] }).then(() => { salaRef.update({ estado: 'jugando' }); });
+                
+                db.ref('salas/' + idSala + '/partida').update({ coloresActivos: activos, nombresJugadores: nicksMap }).then(() => {
+                    db.ref('salas/' + idSala + '/partida/ultimoEvento').set({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] }).then(() => { salaRef.update({ estado: 'jugando' }); });
+                });
             });
         }
 
@@ -241,17 +280,64 @@
         }
 
         // ==========================================
-        // SISTEMA WALKIE-TALKIE ADAPTATIVO
+        // SISTEMA WALKIE-TALKIE CON MEMORIA (SNAPSHOT)
         // ==========================================
         let ultimoEventoId = null;
 
         function conectarMotorAFirebase() {
             partidaRef = db.ref('salas/' + idSala + '/partida');
-            partidaRef.child('ultimoEvento').on('value', (snapshot) => {
-                const ev = snapshot.val();
-                if (!ev || ev.id === ultimoEventoId) return; 
-                ultimoEventoId = ev.id;
-                procesarEventoRemoto(ev);
+            partidaRef.once('value').then((snapshot) => {
+                const p = snapshot.val();
+                if (p && p.coloresActivos) {
+                    coloresActivos = p.coloresActivos;
+                    nombresJugadores = p.nombresJugadores || {};
+                    
+                    // RECONSTRUIR DESDE MEMORIA (Si el jugador recargó la página)
+                    if (p.estadoActual) {
+                        estadoFichas = p.estadoActual.estadoFichas || estadoFichas;
+                        fichasEnMeta = p.estadoActual.fichasEnMeta || fichasEnMeta;
+                        clasificacion = p.estadoActual.clasificacion || [];
+                        grupos = p.estadoActual.grupos || {};
+                        turno = p.estadoActual.turno !== undefined ? p.estadoActual.turno : coloresActivos[0];
+                        valorDado = p.estadoActual.valorDado || 0;
+                        puntosTorneo = p.estadoActual.puntosTorneo || puntosTorneo;
+                        strikesJugadores = p.estadoActual.strikesJugadores || {0:0, 1:0, 2:0, 3:0};
+                        
+                        codigosColor.forEach(c => { if (!coloresActivos.includes(codigosColor.indexOf(c))) { for(let i=0; i<4; i++) { let f = document.getElementById(`${c}-${i}`); if(f) f.style.display = 'none'; } } });
+                        
+                        codigosColor.forEach(c => {
+                            actualizarMetaUI(c);
+                            for(let i=0; i<4; i++) {
+                                let f = document.getElementById(`${c}-${i}`);
+                                if(f && coloresActivos.includes(codigosColor.indexOf(c))) {
+                                    let pos = estadoFichas[c][i];
+                                    if (pos === -1) { f.style.top = f.dataset.baseX + "%"; f.style.left = f.dataset.baseY + "%"; f.style.display = 'flex'; }
+                                    else if (pos >= rutas[c].length - 1) { f.style.display = 'none'; }
+                                    else { f.style.top = rutas[c][pos][0] + "%"; f.style.left = rutas[c][pos][1] + "%"; f.style.display = 'flex'; }
+                                }
+                            }
+                        });
+                        actualizarDistintivos(); actualizarClasificacionRonda(); actualizarTablaTorneo();
+                        if (valorDado > 0) { document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`; document.getElementById('dado-img').style.display = 'inline-block'; }
+                    }
+
+                    actualizarHostLocal();
+                    document.getElementById('capa-lobby').style.display = 'none';
+                    
+                    partidaRef.child('ultimoEvento').on('value', (snapEv) => {
+                        const ev = snapEv.val();
+                        if (!ev || ev.id === ultimoEventoId) return; 
+                        ultimoEventoId = ev.id; procesarEventoRemoto(ev);
+                    });
+
+                    if (p.estadoActual) reiniciarTurnoVisual();
+                } else {
+                    partidaRef.child('ultimoEvento').on('value', (snapEv) => {
+                        const ev = snapEv.val();
+                        if (!ev || ev.id === ultimoEventoId) return; 
+                        ultimoEventoId = ev.id; procesarEventoRemoto(ev);
+                    });
+                }
             });
         }
 
@@ -264,13 +350,15 @@
         function procesarEventoRemoto(ev) {
             switch(ev.tipo) {
                 case 'START':
-                    coloresActivos = ev.activos; nombresJugadores = ev.nicksMap || {}; turno = ev.turnoInicial; soyElHost = true; 
+                    coloresActivos = ev.activos; nombresJugadores = ev.nicksMap || {}; turno = ev.turnoInicial; 
+                    actualizarHostLocal();
                     codigosColor.forEach(c => puntosTorneo[c] = 0);
                     actualizarTablaTorneo();
                     codigosColor.forEach(c => { if (!coloresActivos.includes(codigosColor.indexOf(c))) { for(let i=0; i<4; i++) { let f = document.getElementById(`${c}-${i}`); if(f) f.style.display = 'none'; } } });
                     reiniciarTurnoVisual();
                     break;
                 case 'DADO':
+                    if (!ev.auto) strikesJugadores[ev.colorActor] = 0; // Despierta si hubo acción humana
                     valorDado = ev.valor; document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`; document.getElementById('dado-img').style.display = 'inline-block'; document.getElementById('btn-lanzar').disabled = true;
                     evaluarOpcionesDespuesDelDado();
                     break;
@@ -278,16 +366,23 @@
                     valorDado = 0; document.getElementById('dado-img').style.display = 'none';
                     if (miColorIdx === turno) document.getElementById('btn-lanzar').disabled = false;
                     limiteTurnoMs = Date.now() + 30000; 
-                    if (esModoLocal && turno !== miColorIdx) setTimeout(intentarLanzarDado, 2500); 
+                    
+                    let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
+                    if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) setTimeout(() => intentarLanzarDado(true), 2500); 
                     break;
-                case 'MOVER': ejecutarMovimientoLocal(ev.color, ev.fichaIdx); break;
+                case 'MOVER': 
+                    if (!ev.auto) strikesJugadores[ev.color] = 0;
+                    ejecutarMovimientoLocal(ev.color, ev.fichaIdx); 
+                    break;
                 case 'ACOPLE':
                     document.getElementById('modal-decision').style.display = 'none';
                     resolverAcoplamientoMatematico(ev.color, ev.nuevaPos, ev.decision);
                     break;
                 case 'PASAR_TURNO':
+                    if (ev.timeout) strikesJugadores[ev.turnoAnterior]++; // Aplica Strike al que se quedó inactivo
                     turno = ev.siguienteTurno; intentosSalida = 0; valorDado = 0;
                     document.getElementById('dado-img').style.display = 'none'; document.getElementById('modal-decision').style.display = 'none'; decisionPendiente = null;
+                    actualizarHostLocal();
                     reiniciarTurnoVisual();
                     break;
                 case 'REVANCHA':
@@ -296,14 +391,27 @@
             }
         }
 
+        // --- SISTEMA HOST DESCENTRALIZADO ---
+        function actualizarHostLocal() {
+            if (esModoLocal) { soyElHost = true; return; }
+            // El Host es el jugador con menos strikes (El que tiene mejor conexión)
+            let hostActivo = coloresActivos.find(c => strikesJugadores[c] < 2);
+            if (hostActivo === undefined) hostActivo = coloresActivos[0];
+            soyElHost = (miColorIdx === hostActivo);
+        }
+
+        function guardarSnapshot() {
+            if (esModoLocal || !soyElHost || !partidaRef) return;
+            partidaRef.child('estadoActual').set({ estadoFichas, fichasEnMeta, clasificacion, grupos, turno, valorDado, puntosTorneo, strikesJugadores });
+        }
+
         // ==========================================
-        // CEREBRO MAESTRO DE LA IA (NUEVO)
+        // CEREBRO MAESTRO DE LA IA
         // ==========================================
         function ejecutarCerebroBot(color) {
             let opciones = [];
             let fichasEnBase = 0; let fichasEnSalida = 0; let fichasEnRuta = 0; let fichasEnPasillo = [];
             
-            // 1. Escaneo del Tablero
             for (let i = 0; i < 4; i++) {
                 let pos = estadoFichas[color][i];
                 if (pos === -1) fichasEnBase++;
@@ -314,7 +422,6 @@
 
             let hayGrupoEnSalida = grupos[`${color}-${COORDENADA_SALIDA}`] !== undefined;
 
-            // 2. Generar Movimientos Legales
             for (let i = 0; i < 4; i++) {
                 let pos = estadoFichas[color][i];
                 if (pos >= rutas[color].length - 1) continue; 
@@ -322,14 +429,9 @@
                 if (pos === -1) {
                     if (valorDado === 1 || valorDado === 6) {
                         let puedeSacar = true;
-                        // Regla: Prohibido sacar 3ra si hay 2 sueltas en salida
                         if (fichasEnSalida === 2 && !hayGrupoEnSalida) puedeSacar = false;
-                        // Regla: Prohibido apilar de a 3 (máximo muro de 2 permitidos en salida)
                         if (fichasEnSalida >= 2 && hayGrupoEnSalida) puedeSacar = false;
-
-                        if (puedeSacar) {
-                            opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
-                        }
+                        if (puedeSacar) opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
                     }
                 } else {
                     let np = pos + valorDado;
@@ -338,49 +440,44 @@
                 }
             }
 
-            // 3. Filtrar y Priorizar Opciones
             if (opciones.length > 0) {
                 let eleccion = null;
                 
-                // Aplicar Paciencia de Pasillo (No moliendo turnos a lo loco)
                 let opcionesUtiles = opciones.filter(o => {
                     if (o.esPasillo && o.nuevaPos !== rutas[color].length - 1) {
-                        // Si no llega a la meta, y hay fichas corriendo peligro, no mover esta
                         if (fichasEnRuta > 0 || fichasEnBase > 0) return false; 
                     }
                     return true;
                 });
-                if (opcionesUtiles.length === 0) opcionesUtiles = opciones; // Fallback
+                if (opcionesUtiles.length === 0) opcionesUtiles = opciones; 
 
-                // Prioridad 1: Llegar a la meta exacta
                 let metas = opcionesUtiles.filter(o => o.nuevaPos === rutas[color].length - 1);
                 if (metas.length > 0) eleccion = metas[0];
 
-                // Prioridad 2: Cazar en el tablero general
                 if (!eleccion) {
                     let cazadores = opcionesUtiles.filter(o => compruebaCapturaSimulada(color, o.nuevaPos));
                     if (cazadores.length > 0) eleccion = cazadores[0];
                 }
 
-                // Prioridad 3: Sacar de Base estratégicamente
                 if (!eleccion) {
                     let salidas = opcionesUtiles.filter(o => o.accion === 'salir');
                     if (salidas.length > 0) eleccion = salidas[0];
                 }
 
-                // Prioridad 4: Mover la de más atrás o esparcir desde salida
                 if (!eleccion) {
                     opcionesUtiles.sort((a,b) => a.posActual - b.posActual);
-                    
                     let enSalida = opcionesUtiles.filter(o => o.posActual === COORDENADA_SALIDA);
-                    if (enSalida.length > 0 && fichasEnSalida >= 2) {
-                        eleccion = enSalida[0]; // Romper embotellamientos obligatoriamente
-                    } else {
-                        eleccion = opcionesUtiles[0]; // Mueve al rezagado
+                    if (enSalida.length > 0 && fichasEnSalida >= 2) eleccion = enSalida[0]; 
+                    else {
+                        let opcionesEsparcidas = opcionesUtiles.filter(o => {
+                            let hayPropia = estadoFichas[color].some(p => p === o.nuevaPos);
+                            return !hayPropia || o.nuevaPos === COORDENADA_SALIDA;
+                        });
+                        eleccion = opcionesEsparcidas.length > 0 ? opcionesEsparcidas[0] : opcionesUtiles[0]; 
                     }
                 }
                 
-                distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: eleccion.idx });
+                distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: eleccion.idx, auto: true });
             }
         }
 
@@ -420,7 +517,7 @@
         let estadoFichas = {}; codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
         // ==========================================
-        // LÓGICA DE TURNOS 
+        // LÓGICA DE TURNOS Y GESTIÓN AFK
         // ==========================================
         function reiniciarTurnoVisual() {
             let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
@@ -434,11 +531,16 @@
             
             document.getElementById('btn-lanzar').disabled = (miColorIdx !== turno);
             actualizarEventosClic();
+            guardarSnapshot(); // Guarda el estado en Firebase por si alguien necesita reconectarse
             
             limiteTurnoMs = Date.now() + 30000;
             iniciarTemporizador(colorTexto);
 
-            if (esModoLocal && turno !== miColorIdx) { setTimeout(intentarLanzarDado, 2500); }
+            // ¿Es un Bot fantasma en acción?
+            let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
+            if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) { 
+                setTimeout(() => intentarLanzarDado(true), 2500); 
+            }
         }
 
         function iniciarTemporizador(colorOriginal) {
@@ -452,14 +554,14 @@
                 
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
-                    if (miColorIdx === turno || soyElHost) calcularSiguienteTurnoYEnviar();
+                    if (miColorIdx === turno || soyElHost) calcularSiguienteTurnoYEnviar(true); // Se marca como timeout
                 }
             }, 1000);
         }
 
         function detenerTemporizador() { clearInterval(intervaloTemporizador); }
 
-        function calcularSiguienteTurnoYEnviar() {
+        function calcularSiguienteTurnoYEnviar(fueTimeout = false) {
             let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
             if (clasificacion.length >= objetivoMeta) return;
 
@@ -467,28 +569,31 @@
             do { proxTurno = (proxTurno + 1) % 4; turnosBuscados++; } 
             while ((!coloresActivos.includes(proxTurno) || clasificacion.includes(codigosColor[proxTurno])) && turnosBuscados < 4);
             
-            distribuirEvento({ tipo: 'PASAR_TURNO', siguienteTurno: proxTurno });
+            distribuirEvento({ tipo: 'PASAR_TURNO', siguienteTurno: proxTurno, timeout: fueTimeout, turnoAnterior: turno });
         }
 
-        function intentarLanzarDado() {
-            if (turno !== miColorIdx && !(esModoLocal && turno !== miColorIdx)) return;
+        function intentarLanzarDado(esAuto = false) {
+            if (turno !== miColorIdx && !(esModoLocal && turno !== miColorIdx) && !esAuto) return;
             let valor = Math.floor(Math.random() * 6) + 1;
-            distribuirEvento({ tipo: 'DADO', valor: valor }); 
+            distribuirEvento({ tipo: 'DADO', valor: valor, auto: esAuto, colorActor: turno }); 
         }
 
         function evaluarOpcionesDespuesDelDado() {
             let actual = codigosColor[turno];
             let todasEnBase = estadoFichas[actual].every(pos => pos === -1);
+            let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
             
             if (todasEnBase && valorDado !== 6 && valorDado !== 1) {
-                if (miColorIdx === turno || (esModoLocal && soyElHost && turno !== miColorIdx)) {
+                if (miColorIdx === turno || (esModoLocal && soyElHost && turno !== miColorIdx) || (esFantasma && soyElHost)) {
                     intentosSalida++;
-                    if (intentosSalida >= 3) { setTimeout(() => calcularSiguienteTurnoYEnviar(), 1000); }
+                    if (intentosSalida >= 3) { setTimeout(() => calcularSiguienteTurnoYEnviar(false), 1000); }
                     else { setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 1000); }
                 }
             } else {
                 actualizarEventosClic();
-                if (esModoLocal && turno !== miColorIdx) { setTimeout(() => ejecutarCerebroBot(actual), 2500); }
+                if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) { 
+                    setTimeout(() => ejecutarCerebroBot(actual), 2500); 
+                }
             }
         }
 
@@ -496,7 +601,7 @@
             if (miColorIdx === null || turno !== miColorIdx || valorDado === 0 || color !== codigosColor[turno]) return;
             let posActual = estadoFichas[color][i];
             if (posActual === -1 && valorDado !== 6 && valorDado !== 1) return; 
-            distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: i });
+            distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: i, auto: false });
         }
 
         // ==========================================
@@ -518,8 +623,7 @@
                 Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
                 
                 if (fichasEnMeta[color] >= 4 && !clasificacion.includes(color)) {
-                    clasificacion.push(color);
-                    actualizarClasificacionRonda();
+                    clasificacion.push(color); actualizarClasificacionRonda();
                 }
                 
                 actualizarDistintivos(); 
@@ -548,18 +652,18 @@
                 actualizarDistintivos();
 
                 if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
-                    if (miColorIdx === turno) { 
+                    let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
+                    if (miColorIdx === turno && !esFantasma) { 
                         decisionPendiente = { color, nuevaPos, todasEnDestino };
                         document.getElementById('modal-decision').style.display = 'block';
-                    } else if (esModoLocal && turno !== miColorIdx) { 
-                        // LÓGICA DE ACOPLE INTELIGENTE DEL BOT
+                    } else if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) { 
                         let decisionAcople = true; 
                         let enBase = estadoFichas[color].filter(p => p === -1).length;
                         let hayGrupoPreviamente = grupos[`${color}-${COORDENADA_SALIDA}`] !== undefined;
 
-                        if (todasEnDestino.length === 2 && enBase === 2) decisionAcople = false; // 2da Ficha: NO se monta
-                        else if (todasEnDestino.length === 2 && enBase === 1) decisionAcople = true; // 3ra Ficha: SI arma muro
-                        else if (todasEnDestino.length === 3 && enBase === 0 && hayGrupoPreviamente) decisionAcople = false; // 4ta Ficha: NO se monta al muro
+                        if (todasEnDestino.length === 2 && enBase === 2) decisionAcople = false; 
+                        else if (todasEnDestino.length === 2 && enBase === 1) decisionAcople = true; 
+                        else if (todasEnDestino.length === 3 && enBase === 0 && hayGrupoPreviamente) decisionAcople = false; 
 
                         distribuirEvento({ tipo: 'ACOPLE', color: color, nuevaPos: nuevaPos, decision: decisionAcople });
                     }
@@ -582,9 +686,7 @@
             document.getElementById('btn-lanzar').disabled = true;
 
             calcularPuntosTorneo();
-
-            let ganadorColor = clasificacion[0];
-            let idxGanador = codigosColor.indexOf(ganadorColor);
+            let ganadorColor = clasificacion[0]; let idxGanador = codigosColor.indexOf(ganadorColor);
             let nickGanador = nombresJugadores[idxGanador] || ganadorColor;
 
             document.getElementById('texto-ganador').innerHTML = `El ganador absoluto es:<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span>`;
@@ -593,9 +695,7 @@
 
         function calcularPuntosTorneo() {
             const premios = [25, 15, 10, 5];
-            clasificacion.forEach((colorGanador, posicion) => {
-                if(premios[posicion]) { puntosTorneo[colorGanador] += premios[posicion]; }
-            });
+            clasificacion.forEach((colorGanador, posicion) => { if(premios[posicion]) puntosTorneo[colorGanador] += premios[posicion]; });
             actualizarTablaTorneo();
         }
 
@@ -613,8 +713,7 @@
             const lista = document.getElementById('lista-torneo'); lista.innerHTML = "";
             let ranking = coloresActivos.map(idx => codigosColor[idx]);
             ranking.sort((a, b) => puntosTorneo[b] - puntosTorneo[a]);
-
-            ranking.forEach((color, index) => {
+            ranking.forEach((color) => {
                 const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderLeftColor = color;
                 let idxColor = codigosColor.indexOf(color); let nickAMostrar = nombresJugadores[idxColor] || color;
                 item.innerHTML = `<span>${nickAMostrar.toUpperCase()}</span> <span style="color:#f1c40f; font-weight:bold;">${puntosTorneo[color]} pts</span>`;
@@ -625,33 +724,25 @@
         // ==========================================
         // LA REVANCHA 
         // ==========================================
-        function solicitarRevancha() {
-            let ganadorPrevio = codigosColor.indexOf(clasificacion[0]);
-            distribuirEvento({ tipo: 'REVANCHA', primerTurno: ganadorPrevio });
-        }
+        function solicitarRevancha() { distribuirEvento({ tipo: 'REVANCHA', primerTurno: codigosColor.indexOf(clasificacion[0]) }); }
 
         function ejecutarLimpiezaRevancha(primerTurno) {
             codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
             fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
             clasificacion = []; grupos = {}; intentosSalida = 0; valorDado = 0;
             
-            document.getElementById('dado-img').style.display = 'none';
-            document.getElementById('modal-ganador').style.display = 'none';
-            actualizarClasificacionRonda(); 
-            actualizarDistintivos(); 
+            document.getElementById('dado-img').style.display = 'none'; document.getElementById('modal-ganador').style.display = 'none';
+            actualizarClasificacionRonda(); actualizarDistintivos(); 
             
             codigosColor.forEach(c => {
                 actualizarMetaUI(c);
                 for(let i=0; i<4; i++) {
                     let f = document.getElementById(`${c}-${i}`);
                     if(f && coloresActivos.includes(codigosColor.indexOf(c))) {
-                        f.style.top = f.dataset.baseX + "%";
-                        f.style.left = f.dataset.baseY + "%";
-                        f.style.display = 'flex';
+                        f.style.top = f.dataset.baseX + "%"; f.style.left = f.dataset.baseY + "%"; f.style.display = 'flex';
                     }
                 }
             });
-
             turno = primerTurno !== undefined ? primerTurno : coloresActivos[0];
             reiniciarTurnoVisual();
         }
@@ -665,14 +756,13 @@
         function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
             let todasEnDestino = []; estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
             if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
-            verificarCaptura(color, nuevaPos); 
-            actualizarDistintivos(); 
-            finalizarMovimientoPasoTurno(color);
+            verificarCaptura(color, nuevaPos); actualizarDistintivos(); finalizarMovimientoPasoTurno(color);
         }
 
         function finalizarMovimientoPasoTurno(color) {
-            if (miColorIdx !== turno && !(esModoLocal && soyElHost)) return; 
-            if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) { setTimeout(() => calcularSiguienteTurnoYEnviar(), 500); } 
+            let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
+            if (miColorIdx !== turno && !(esModoLocal && soyElHost) && !(esFantasma && soyElHost)) return; 
+            if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) { setTimeout(() => calcularSiguienteTurnoYEnviar(false), 500); } 
             else { setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 500); }
         }
 
@@ -710,8 +800,7 @@
                     grupos[key].forEach(idFicha => {
                         const ficha = document.getElementById(idFicha);
                         if (ficha) {
-                            const badge = document.createElement('div');
-                            badge.className = 'badge-grupo'; badge.innerText = grupos[key].length;
+                            const badge = document.createElement('div'); badge.className = 'badge-grupo'; badge.innerText = grupos[key].length;
                             ficha.appendChild(badge);
                         }
                     });
@@ -725,8 +814,7 @@
             const lista = document.getElementById('lista-clasificacion'); lista.innerHTML = "";
             clasificacion.forEach((color, index) => {
                 const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderLeftColor = color;
-                let idxColor = codigosColor.indexOf(color);
-                let nickAMostrar = nombresJugadores[idxColor] || color;
+                let idxColor = codigosColor.indexOf(color); let nickAMostrar = nombresJugadores[idxColor] || color;
                 item.innerHTML = `<span>#${index + 1} Lugar</span> <span style="color:${color}; font-weight:bold;">${nickAMostrar.toUpperCase()}</span>`;
                 lista.appendChild(item);
             });
@@ -739,8 +827,7 @@
                 ficha.className = 'ficha'; ficha.style.backgroundColor = color;
                 ficha.style.top = coord[0] + "%"; ficha.style.left = coord[1] + "%";
                 ficha.dataset.baseX = coord[0]; ficha.dataset.baseY = coord[1];
-                ficha.id = `${color}-${i}`; 
-                ficha.onclick = () => intentarMovimientoFicha(color, i);
+                ficha.id = `${color}-${i}`; ficha.onclick = () => intentarMovimientoFicha(color, i);
                 contenedor.appendChild(ficha);
             });
         }
