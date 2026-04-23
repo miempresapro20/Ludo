@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V6.0 (Reconexión y Piloto Automático)</title>
+    <title>Ludo Family: Motor V6.1 (Pantalla Siempre Activa)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -159,7 +159,6 @@
         let coloresActivos = []; let nombresJugadores = {}; 
         let soyElHost = false;   
         
-        // --- NUEVO: Piloto Automático y Rejoin ---
         let strikesJugadores = {0:0, 1:0, 2:0, 3:0};
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -169,7 +168,35 @@
         const linkCompleto = window.location.origin + window.location.pathname + "?sala=" + idSala;
         document.getElementById('link-compartir').value = linkCompleto;
 
-        // --- SISTEMA DE TICKET (Reconexión Silenciosa) ---
+        // ==========================================
+        // NUEVO: SISTEMA DE BLOQUEO DE PANTALLA (WAKE LOCK)
+        // ==========================================
+        let wakeLock = null;
+
+        async function solicitarWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Pantalla asegurada: No se apagará.');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Bloqueo de pantalla liberado por el sistema.');
+                    });
+                } catch (err) {
+                    console.log(`El bloqueo de pantalla no está disponible: ${err.name}, ${err.message}`);
+                }
+            }
+        }
+
+        // Si el usuario cambia de pestaña y vuelve, pedimos el bloqueo de nuevo
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                solicitarWakeLock();
+            }
+        });
+
+        // ==========================================
+        // SISTEMA DE TICKET (Reconexión Silenciosa)
+        // ==========================================
         window.onload = () => {
             let savedToken = localStorage.getItem('ludo_token_' + idSala);
             let savedColor = localStorage.getItem('ludo_color_' + idSala);
@@ -185,6 +212,7 @@
                         });
                     }
                     if (found) {
+                        solicitarWakeLock(); // Activamos la pantalla al reconectar
                         esModoLocal = false; 
                         document.getElementById('paso-0').style.display = 'none';
                         document.getElementById('capa-lobby').innerHTML = '<h2 style="color:#f1c40f">Reconectando a tu asiento...</h2>';
@@ -204,6 +232,9 @@
         }
 
         function seleccionarModoJuego(modo) {
+            // Solicitamos el Wake Lock en cuanto hay interacción humana
+            solicitarWakeLock(); 
+
             modoJuego = modo; esModoLocal = (modo === 'local');
             document.getElementById('paso-0').style.display = 'none';
             document.getElementById('paso-1').style.display = 'block';
@@ -292,7 +323,6 @@
                     coloresActivos = p.coloresActivos;
                     nombresJugadores = p.nombresJugadores || {};
                     
-                    // RECONSTRUIR DESDE MEMORIA (Si el jugador recargó la página)
                     if (p.estadoActual) {
                         estadoFichas = p.estadoActual.estadoFichas || estadoFichas;
                         fichasEnMeta = p.estadoActual.fichasEnMeta || fichasEnMeta;
@@ -358,7 +388,7 @@
                     reiniciarTurnoVisual();
                     break;
                 case 'DADO':
-                    if (!ev.auto) strikesJugadores[ev.colorActor] = 0; // Despierta si hubo acción humana
+                    if (!ev.auto) strikesJugadores[ev.colorActor] = 0; 
                     valorDado = ev.valor; document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`; document.getElementById('dado-img').style.display = 'inline-block'; document.getElementById('btn-lanzar').disabled = true;
                     evaluarOpcionesDespuesDelDado();
                     break;
@@ -379,7 +409,7 @@
                     resolverAcoplamientoMatematico(ev.color, ev.nuevaPos, ev.decision);
                     break;
                 case 'PASAR_TURNO':
-                    if (ev.timeout) strikesJugadores[ev.turnoAnterior]++; // Aplica Strike al que se quedó inactivo
+                    if (ev.timeout) strikesJugadores[ev.turnoAnterior]++; 
                     turno = ev.siguienteTurno; intentosSalida = 0; valorDado = 0;
                     document.getElementById('dado-img').style.display = 'none'; document.getElementById('modal-decision').style.display = 'none'; decisionPendiente = null;
                     actualizarHostLocal();
@@ -394,7 +424,6 @@
         // --- SISTEMA HOST DESCENTRALIZADO ---
         function actualizarHostLocal() {
             if (esModoLocal) { soyElHost = true; return; }
-            // El Host es el jugador con menos strikes (El que tiene mejor conexión)
             let hostActivo = coloresActivos.find(c => strikesJugadores[c] < 2);
             if (hostActivo === undefined) hostActivo = coloresActivos[0];
             soyElHost = (miColorIdx === hostActivo);
@@ -517,7 +546,7 @@
         let estadoFichas = {}; codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
         // ==========================================
-        // LÓGICA DE TURNOS Y GESTIÓN AFK
+        // LÓGICA DE TURNOS 
         // ==========================================
         function reiniciarTurnoVisual() {
             let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
@@ -531,16 +560,13 @@
             
             document.getElementById('btn-lanzar').disabled = (miColorIdx !== turno);
             actualizarEventosClic();
-            guardarSnapshot(); // Guarda el estado en Firebase por si alguien necesita reconectarse
+            guardarSnapshot(); 
             
             limiteTurnoMs = Date.now() + 30000;
             iniciarTemporizador(colorTexto);
 
-            // ¿Es un Bot fantasma en acción?
             let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
-            if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) { 
-                setTimeout(() => intentarLanzarDado(true), 2500); 
-            }
+            if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) { setTimeout(() => intentarLanzarDado(true), 2500); }
         }
 
         function iniciarTemporizador(colorOriginal) {
@@ -554,7 +580,7 @@
                 
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
-                    if (miColorIdx === turno || soyElHost) calcularSiguienteTurnoYEnviar(true); // Se marca como timeout
+                    if (miColorIdx === turno || soyElHost) calcularSiguienteTurnoYEnviar(true); 
                 }
             }, 1000);
         }
@@ -591,9 +617,7 @@
                 }
             } else {
                 actualizarEventosClic();
-                if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) { 
-                    setTimeout(() => ejecutarCerebroBot(actual), 2500); 
-                }
+                if ((esModoLocal && turno !== miColorIdx) || (esFantasma && soyElHost)) { setTimeout(() => ejecutarCerebroBot(actual), 2500); }
             }
         }
 
