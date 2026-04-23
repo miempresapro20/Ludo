@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V4.1 (Modo Local Humanizado)</title>
+    <title>Ludo Family: Motor V4.2 (Ritmo Natural y Seguridad Lobby)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -43,7 +43,7 @@
         .btn-grande { padding: 15px 30px; font-size: 18px; display: block; width: 100%; max-width: 300px; margin: 10px auto; }
         #botones-colores .btn:disabled { opacity: 0.3; cursor: not-allowed; }
         
-        #alerta-flotante { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #f39c12; padding: 15px 30px; border-radius: 8px; z-index: 2000; font-weight: bold; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #alerta-flotante { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #e74c3c; padding: 15px 30px; border-radius: 8px; z-index: 2000; font-weight: bold; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
 
         #modal-decision { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2c3e50; border: 3px solid #f1c40f; padding: 20px; border-radius: 15px; z-index: 3000; display: none; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); width: 80%; max-width: 300px; }
         #modal-ganador { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a252f; border: 5px solid #f1c40f; padding: 40px; border-radius: 20px; z-index: 4000; display: none; text-align: center; box-shadow: 0 0 50px rgba(241,196,15,0.4); width: 90%; max-width: 400px; }
@@ -247,6 +247,12 @@
 
         // Inicio Local
         function iniciarPartidaLocal(numJugadores) {
+            // FRENO DE SEGURIDAD PARA EL BUG DE COLOR VACÍO
+            if (miColorIdx === null) {
+                mostrarAlerta("¡Debes seleccionar tu color primero!");
+                return;
+            }
+
             let activos = [];
             let nicksMap = {};
             let nombresBots = ['Carlos', 'David', 'Luis'];
@@ -267,7 +273,6 @@
             activos.sort((a,b) => a-b);
             document.getElementById('capa-lobby').style.display = 'none';
             
-            // Auto-disparamos el evento sin usar Firebase
             distribuirEvento({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] });
         }
 
@@ -289,7 +294,6 @@
         function distribuirEvento(datos) {
             datos.id = Date.now() + "_" + Math.random().toString(36).substr(2, 5);
             if (esModoLocal) {
-                // Bypass absoluto de internet
                 setTimeout(() => procesarEventoRemoto(datos), 50);
             } else {
                 if (!partidaRef) return;
@@ -323,7 +327,8 @@
                     valorDado = 0; document.getElementById('dado-img').style.display = 'none';
                     if (miColorIdx === turno) document.getElementById('btn-lanzar').disabled = false;
                     limiteTurnoMs = Date.now() + 30000; 
-                    if (esModoLocal && turno !== miColorIdx) setTimeout(intentarLanzarDado, 1000); 
+                    // Ritmo de Bot Ajustado a 2.5s
+                    if (esModoLocal && turno !== miColorIdx) setTimeout(intentarLanzarDado, 2500); 
                     break;
                 case 'MOVER': ejecutarMovimientoLocal(ev.color, ev.fichaIdx); break;
                 case 'ACOPLE':
@@ -341,7 +346,7 @@
         }
 
         // ==========================================
-        // CEREBRO DE LA INTELIGENCIA ARTIFICIAL (Bots Cazadores)
+        // CEREBRO DE LA INTELIGENCIA ARTIFICIAL
         // ==========================================
         function ejecutarCerebroBot(color) {
             let opciones = [];
@@ -430,8 +435,9 @@
             limiteTurnoMs = Date.now() + 30000;
             iniciarTemporizador();
 
+            // Ritmo de Bot Ajustado a 2.5s
             if (esModoLocal && turno !== miColorIdx) {
-                setTimeout(intentarLanzarDado, 1500); 
+                setTimeout(intentarLanzarDado, 2500); 
             }
         }
 
@@ -484,8 +490,9 @@
                 }
             } else {
                 actualizarEventosClic();
+                // Ritmo de Bot Ajustado a 2.5s
                 if (esModoLocal && turno !== miColorIdx) {
-                    setTimeout(() => ejecutarCerebroBot(actual), 1500);
+                    setTimeout(() => ejecutarCerebroBot(actual), 2500);
                 }
             }
         }
