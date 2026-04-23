@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V5.1 (Gráficas de Acople Restauradas)</title>
+    <title>Ludo Family: Motor V5.2 (Inteligencia Artificial Humanizada)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -172,7 +172,6 @@
             setTimeout(() => alerta.style.display = 'none', 3000);
         }
 
-        // --- FLUJO DEL LOBBY MULTI-MODO ---
         function seleccionarModoJuego(modo) {
             modoJuego = modo; esModoLocal = (modo === 'local');
             document.getElementById('paso-0').style.display = 'none';
@@ -297,27 +296,60 @@
         }
 
         // ==========================================
-        // CEREBRO DE LA INTELIGENCIA ARTIFICIAL
+        // NUEVO CEREBRO: IA INTELIGENTE Y ESPARCIDA
         // ==========================================
         function ejecutarCerebroBot(color) {
             let opciones = [];
             for (let i = 0; i < 4; i++) {
                 let pos = estadoFichas[color][i];
                 if (pos >= rutas[color].length - 1) continue; 
-                if (pos === -1 && (valorDado === 1 || valorDado === 6)) opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
-                else if (pos > -1) {
+                
+                if (pos === -1) {
+                    if (valorDado === 1 || valorDado === 6) {
+                        opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
+                    }
+                } else {
                     let np = pos + valorDado;
                     if (np >= rutas[color].length) np = (rutas[color].length - 1) - (np - (rutas[color].length - 1));
                     opciones.push({ idx: i, accion: 'mover', posActual: pos, nuevaPos: np });
                 }
             }
+
             if (opciones.length > 0) {
-                let eleccion = opciones[0]; 
-                let salida = opciones.find(o => o.accion === 'salir');
-                let cazador = opciones.find(o => compruebaCapturaSimulada(color, o.nuevaPos));
-                if (salida) eleccion = salida; 
-                else if (cazador) eleccion = cazador; 
-                else { opciones.sort((a,b) => b.posActual - a.posActual); eleccion = opciones[0]; }
+                let eleccion = null;
+                
+                // 1. Prioridad Máxima: Sacar ficha si está en la base
+                let salidas = opciones.filter(o => o.accion === 'salir');
+                if (salidas.length > 0) eleccion = salidas[0];
+                
+                // 2. Prioridad Fuerte: Cazar al enemigo
+                if (!eleccion) {
+                    let cazadores = opciones.filter(o => compruebaCapturaSimulada(color, o.nuevaPos));
+                    if (cazadores.length > 0) eleccion = cazadores[0];
+                }
+                
+                // 3. Prioridad Media: Entrar a la meta exacta
+                if (!eleccion) {
+                    let metas = opciones.filter(o => o.nuevaPos === rutas[color].length - 1);
+                    if (metas.length > 0) eleccion = metas[0];
+                }
+                
+                // 4. Inteligencia de avance (El bloque)
+                if (!eleccion) {
+                    // Ordenamos de menor a mayor para empujar a las fichas que van perdiendo la carrera
+                    opciones.sort((a,b) => a.posActual - b.posActual);
+                    eleccion = opciones[0]; // Por defecto agarramos la más rezagada
+                    
+                    // Pero filtramos para evitar apilar en la misma casilla y fomentar esparcirse
+                    let opcionesEsparcidas = opciones.filter(o => {
+                        let hayPropia = estadoFichas[color].some(p => p === o.nuevaPos);
+                        return !hayPropia || o.nuevaPos === COORDENADA_SALIDA;
+                    });
+                    if (opcionesEsparcidas.length > 0) {
+                        eleccion = opcionesEsparcidas[0]; // Mueve una que no se apile
+                    }
+                }
+                
                 distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: eleccion.idx });
             }
         }
@@ -483,7 +515,6 @@
                 let todasEnDestino = [];
                 estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
 
-                // --- ARREGLO V5.1: Dibujamos inmediatamente si se desarmó un grupo ---
                 actualizarDistintivos();
 
                 if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
@@ -496,10 +527,7 @@
                 } else {
                     if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
                     verificarCaptura(color, nuevaPos);
-                    
-                    // --- ARREGLO V5.1: Damos la orden de dibujar de nuevo los números tras una captura o acople normal ---
                     actualizarDistintivos();
-                    
                     finalizarMovimientoPasoTurno(color);
                 }
             }
@@ -594,21 +622,21 @@
         // ==========================================
         function cerrarModalGanador() { document.getElementById('modal-ganador').style.display = 'none'; }
         function responderModalAcople(quiereAcoplar) { if (!decisionPendiente) return; distribuirEvento({ tipo: 'ACOPLE', color: decisionPendiente.color, nuevaPos: decisionPendiente.nuevaPos, decision: quiereAcoplar }); }
+        
         function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
             let todasEnDestino = []; estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
             if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
             verificarCaptura(color, nuevaPos); 
-            
-            // --- ARREGLO V5.1: Se actualiza tras pulsar en el modal de acople ---
             actualizarDistintivos(); 
-            
             finalizarMovimientoPasoTurno(color);
         }
+
         function finalizarMovimientoPasoTurno(color) {
             if (miColorIdx !== turno && !(esModoLocal && soyElHost)) return; 
             if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) { setTimeout(() => calcularSiguienteTurnoYEnviar(), 500); } 
             else { setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 500); }
         }
+
         function verificarCaptura(colorJugador, posActual) {
             const posCoords = rutas[colorJugador][posActual]; const margen = 2.0; 
             let esZonaSegura = codigosColor.some(c => { let estrella = rutas[c][COORDENADA_SALIDA]; return Math.abs(estrella[0] - posCoords[0]) < margen && Math.abs(estrella[1] - posCoords[1]) < margen; });
@@ -626,6 +654,7 @@
                 });
             });
         }
+
         function actualizarEventosClic() {
             codigosColor.forEach(c => {
                 for (let i = 0; i < 4; i++) {
@@ -634,6 +663,7 @@
                 }
             });
         }
+
         function actualizarDistintivos() {
             document.querySelectorAll('.badge-grupo').forEach(b => b.remove());
             Object.keys(grupos).forEach(key => {
@@ -649,6 +679,7 @@
                 }
             });
         }
+
         function actualizarMetaUI(color) { const el = document.getElementById(`ui-${color}`); el.innerText = fichasEnMeta[color] > 0 ? fichasEnMeta[color] : ""; }
         
         function actualizarClasificacion() {
