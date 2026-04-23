@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V5.2 (Inteligencia Artificial Humanizada)</title>
+    <title>Ludo Family: Motor V5.3 (IA de Nivel Experto)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -172,6 +172,7 @@
             setTimeout(() => alerta.style.display = 'none', 3000);
         }
 
+        // --- FLUJO DEL LOBBY MULTI-MODO ---
         function seleccionarModoJuego(modo) {
             modoJuego = modo; esModoLocal = (modo === 'local');
             document.getElementById('paso-0').style.display = 'none';
@@ -296,57 +297,86 @@
         }
 
         // ==========================================
-        // NUEVO CEREBRO: IA INTELIGENTE Y ESPARCIDA
+        // CEREBRO MAESTRO DE LA IA (NUEVO)
         // ==========================================
         function ejecutarCerebroBot(color) {
             let opciones = [];
+            let fichasEnBase = 0; let fichasEnSalida = 0; let fichasEnRuta = 0; let fichasEnPasillo = [];
+            
+            // 1. Escaneo del Tablero
+            for (let i = 0; i < 4; i++) {
+                let pos = estadoFichas[color][i];
+                if (pos === -1) fichasEnBase++;
+                else if (pos === COORDENADA_SALIDA) fichasEnSalida++;
+                else if (pos >= rutas[color].length - 6 && pos < rutas[color].length - 1) fichasEnPasillo.push(i);
+                else if (pos < rutas[color].length - 1) fichasEnRuta++;
+            }
+
+            let hayGrupoEnSalida = grupos[`${color}-${COORDENADA_SALIDA}`] !== undefined;
+
+            // 2. Generar Movimientos Legales
             for (let i = 0; i < 4; i++) {
                 let pos = estadoFichas[color][i];
                 if (pos >= rutas[color].length - 1) continue; 
                 
                 if (pos === -1) {
                     if (valorDado === 1 || valorDado === 6) {
-                        opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
+                        let puedeSacar = true;
+                        // Regla: Prohibido sacar 3ra si hay 2 sueltas en salida
+                        if (fichasEnSalida === 2 && !hayGrupoEnSalida) puedeSacar = false;
+                        // Regla: Prohibido apilar de a 3 (máximo muro de 2 permitidos en salida)
+                        if (fichasEnSalida >= 2 && hayGrupoEnSalida) puedeSacar = false;
+
+                        if (puedeSacar) {
+                            opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
+                        }
                     }
                 } else {
                     let np = pos + valorDado;
                     if (np >= rutas[color].length) np = (rutas[color].length - 1) - (np - (rutas[color].length - 1));
-                    opciones.push({ idx: i, accion: 'mover', posActual: pos, nuevaPos: np });
+                    opciones.push({ idx: i, accion: 'mover', posActual: pos, nuevaPos: np, esPasillo: fichasEnPasillo.includes(i) });
                 }
             }
 
+            // 3. Filtrar y Priorizar Opciones
             if (opciones.length > 0) {
                 let eleccion = null;
                 
-                // 1. Prioridad Máxima: Sacar ficha si está en la base
-                let salidas = opciones.filter(o => o.accion === 'salir');
-                if (salidas.length > 0) eleccion = salidas[0];
-                
-                // 2. Prioridad Fuerte: Cazar al enemigo
+                // Aplicar Paciencia de Pasillo (No moliendo turnos a lo loco)
+                let opcionesUtiles = opciones.filter(o => {
+                    if (o.esPasillo && o.nuevaPos !== rutas[color].length - 1) {
+                        // Si no llega a la meta, y hay fichas corriendo peligro, no mover esta
+                        if (fichasEnRuta > 0 || fichasEnBase > 0) return false; 
+                    }
+                    return true;
+                });
+                if (opcionesUtiles.length === 0) opcionesUtiles = opciones; // Fallback
+
+                // Prioridad 1: Llegar a la meta exacta
+                let metas = opcionesUtiles.filter(o => o.nuevaPos === rutas[color].length - 1);
+                if (metas.length > 0) eleccion = metas[0];
+
+                // Prioridad 2: Cazar en el tablero general
                 if (!eleccion) {
-                    let cazadores = opciones.filter(o => compruebaCapturaSimulada(color, o.nuevaPos));
+                    let cazadores = opcionesUtiles.filter(o => compruebaCapturaSimulada(color, o.nuevaPos));
                     if (cazadores.length > 0) eleccion = cazadores[0];
                 }
-                
-                // 3. Prioridad Media: Entrar a la meta exacta
+
+                // Prioridad 3: Sacar de Base estratégicamente
                 if (!eleccion) {
-                    let metas = opciones.filter(o => o.nuevaPos === rutas[color].length - 1);
-                    if (metas.length > 0) eleccion = metas[0];
+                    let salidas = opcionesUtiles.filter(o => o.accion === 'salir');
+                    if (salidas.length > 0) eleccion = salidas[0];
                 }
-                
-                // 4. Inteligencia de avance (El bloque)
+
+                // Prioridad 4: Mover la de más atrás o esparcir desde salida
                 if (!eleccion) {
-                    // Ordenamos de menor a mayor para empujar a las fichas que van perdiendo la carrera
-                    opciones.sort((a,b) => a.posActual - b.posActual);
-                    eleccion = opciones[0]; // Por defecto agarramos la más rezagada
+                    opcionesUtiles.sort((a,b) => a.posActual - b.posActual);
                     
-                    // Pero filtramos para evitar apilar en la misma casilla y fomentar esparcirse
-                    let opcionesEsparcidas = opciones.filter(o => {
-                        let hayPropia = estadoFichas[color].some(p => p === o.nuevaPos);
-                        return !hayPropia || o.nuevaPos === COORDENADA_SALIDA;
-                    });
-                    if (opcionesEsparcidas.length > 0) {
-                        eleccion = opcionesEsparcidas[0]; // Mueve una que no se apile
+                    let enSalida = opcionesUtiles.filter(o => o.posActual === COORDENADA_SALIDA);
+                    if (enSalida.length > 0 && fichasEnSalida >= 2) {
+                        eleccion = enSalida[0]; // Romper embotellamientos obligatoriamente
+                    } else {
+                        eleccion = opcionesUtiles[0]; // Mueve al rezagado
                     }
                 }
                 
@@ -522,7 +552,16 @@
                         decisionPendiente = { color, nuevaPos, todasEnDestino };
                         document.getElementById('modal-decision').style.display = 'block';
                     } else if (esModoLocal && turno !== miColorIdx) { 
-                        distribuirEvento({ tipo: 'ACOPLE', color: color, nuevaPos: nuevaPos, decision: true });
+                        // LÓGICA DE ACOPLE INTELIGENTE DEL BOT
+                        let decisionAcople = true; 
+                        let enBase = estadoFichas[color].filter(p => p === -1).length;
+                        let hayGrupoPreviamente = grupos[`${color}-${COORDENADA_SALIDA}`] !== undefined;
+
+                        if (todasEnDestino.length === 2 && enBase === 2) decisionAcople = false; // 2da Ficha: NO se monta
+                        else if (todasEnDestino.length === 2 && enBase === 1) decisionAcople = true; // 3ra Ficha: SI arma muro
+                        else if (todasEnDestino.length === 3 && enBase === 0 && hayGrupoPreviamente) decisionAcople = false; // 4ta Ficha: NO se monta al muro
+
+                        distribuirEvento({ tipo: 'ACOPLE', color: color, nuevaPos: nuevaPos, decision: decisionAcople });
                     }
                 } else {
                     if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
