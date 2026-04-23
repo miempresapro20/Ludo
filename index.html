@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V3 (Arquitectura Walkie-Talkie)</title>
+    <title>Ludo Family: Motor V3.1 (Pop-up de Victoria y Podio Final)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -50,6 +50,14 @@
             z-index: 3000; display: none; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5);
             width: 80%; max-width: 300px;
         }
+
+        /* Novedad: Modal del Gran Ganador */
+        #modal-ganador {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #1a252f; border: 5px solid #f1c40f; padding: 40px; border-radius: 20px;
+            z-index: 4000; display: none; text-align: center; box-shadow: 0 0 50px rgba(241,196,15,0.4);
+            width: 90%; max-width: 400px;
+        }
     </style>
 </head>
 <body>
@@ -59,6 +67,12 @@
         <p style="font-size: 18px; margin-bottom: 20px;">¿Deseas acoplar las fichas en la salida?</p>
         <button class="btn" style="background: #27ae60; color: white;" onclick="responderModalAcople(true)">SÍ</button>
         <button class="btn" style="background: #e74c3c; color: white;" onclick="responderModalAcople(false)">NO</button>
+    </div>
+
+    <div id="modal-ganador">
+        <h2 style="color: #f1c40f; font-size: 30px; margin-top: 0;">¡Partida Terminada!</h2>
+        <h3 id="texto-ganador" style="color: white; font-size: 20px; line-height: 1.5;"></h3>
+        <button class="btn" style="background: #3498db; color: white; margin-top: 25px; width: 100%;" onclick="cerrarModalGanador()">Ver Tablero Final</button>
     </div>
 
     <div id="capa-lobby" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
@@ -102,7 +116,7 @@
         <img id="dado-img" src="" alt="Dado">
         <br>
         <button id="btn-lanzar" class="btn" style="background-color: #27ae60; color: white;" onclick="intentarLanzarDado()" disabled>Lanzar Dado</button>
-        <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Reiniciar Sala</button>
+        <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Abandonar / Reiniciar</button>
         <div id="seccion-clasificacion">
             <h3 style="margin-top: 0;">Tabla de Posiciones</h3>
             <div id="lista-clasificacion"></div>
@@ -125,6 +139,7 @@
         let miColorIdx = null; 
         let apodo = "";
         let coloresActivos = []; 
+        let nombresJugadores = {}; // Diccionario global para guardar Nombres
         let soyElHost = false;   
         
         const urlParams = new URLSearchParams(window.location.search);
@@ -188,31 +203,31 @@
             jugadoresRef.once('value').then(snapshot => {
                 const jugadores = snapshot.val() || {};
                 let activos = [];
-                Object.values(jugadores).forEach(j => activos.push(j.colorIdx));
+                let nicksMap = {};
+                
+                Object.values(jugadores).forEach(j => {
+                    activos.push(j.colorIdx);
+                    nicksMap[j.colorIdx] = j.nick;
+                });
                 activos.sort((a,b) => a-b);
                 
-                // SISTEMA WALKIE-TALKIE: Enviamos el primer evento de ARRANQUE
                 db.ref('salas/' + idSala + '/partida/ultimoEvento').set({
                     id: Date.now() + "_start",
                     tipo: 'START',
                     activos: activos,
+                    nicksMap: nicksMap,
                     turnoInicial: activos[0]
                 }).then(() => { salaRef.update({ estado: 'jugando' }); });
             });
         }
 
-        // ==========================================
-        // LA NUEVA ARQUITECTURA WALKIE-TALKIE
-        // ==========================================
         let ultimoEventoId = null;
 
         function conectarMotorAFirebase() {
             partidaRef = db.ref('salas/' + idSala + '/partida');
-            
-            // Solo escuchamos el buzón "ultimoEvento", ahorrando 99% de datos
             partidaRef.child('ultimoEvento').on('value', (snapshot) => {
                 const ev = snapshot.val();
-                if (!ev || ev.id === ultimoEventoId) return; // Ignorar si es un evento viejo
+                if (!ev || ev.id === ultimoEventoId) return; 
                 ultimoEventoId = ev.id;
                 procesarEventoRemoto(ev);
             });
@@ -220,7 +235,7 @@
 
         function enviarEvento(datos) {
             if (!partidaRef) return;
-            datos.id = Date.now() + "_" + Math.random().toString(36).substr(2, 5); // ID Único
+            datos.id = Date.now() + "_" + Math.random().toString(36).substr(2, 5); 
             partidaRef.child('ultimoEvento').set(datos);
         }
 
@@ -228,10 +243,10 @@
             switch(ev.tipo) {
                 case 'START':
                     coloresActivos = ev.activos;
+                    nombresJugadores = ev.nicksMap || {};
                     turno = ev.turnoInicial;
                     soyElHost = (miColorIdx === coloresActivos[0]);
                     
-                    // Ocultar fichas que nadie usa
                     codigosColor.forEach(c => {
                         if (!coloresActivos.includes(codigosColor.indexOf(c))) {
                             for(let i=0; i<4; i++) {
@@ -255,11 +270,10 @@
                     valorDado = 0;
                     document.getElementById('dado-img').style.display = 'none';
                     if (miColorIdx === turno) document.getElementById('btn-lanzar').disabled = false;
-                    limiteTurnoMs = Date.now() + 30000; // Reset reloj
+                    limiteTurnoMs = Date.now() + 30000; 
                     break;
                     
                 case 'MOVER':
-                    // Ejecutamos la matemática localmente!
                     ejecutarMovimientoLocal(ev.color, ev.fichaIdx);
                     break;
                     
@@ -306,12 +320,7 @@
         // ==========================================
         function reiniciarTurnoVisual() {
             let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
-            if (clasificacion.length >= objetivoMeta) {
-                document.getElementById('indicador-turno').innerHTML = `<span>FIN DE PARTIDA</span>`;
-                document.getElementById('btn-lanzar').disabled = true;
-                detenerTemporizador();
-                return;
-            }
+            if (clasificacion.length >= objetivoMeta) return; // Si ya se acabó, no reiniciar
             
             document.getElementById('indicador-turno').innerHTML = `<span>Turno: ${colores[turno]}</span><span id="temporizador-ui" style="float: right;">⏱</span>`;
             document.getElementById('indicador-turno').style.backgroundColor = codigosColor[turno];
@@ -334,7 +343,6 @@
                 
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
-                    // Fuerza bruta si alguien se desconecta
                     if (miColorIdx === turno || soyElHost) {
                         calcularSiguienteTurnoYEnviar();
                     }
@@ -359,14 +367,13 @@
         function intentarLanzarDado() {
             if (miColorIdx === null || turno !== miColorIdx) return;
             let valor = Math.floor(Math.random() * 6) + 1;
-            enviarEvento({ tipo: 'DADO', valor: valor }); // Solo avisamos el número
+            enviarEvento({ tipo: 'DADO', valor: valor }); 
         }
 
         function evaluarOpcionesDespuesDelDado() {
             let actual = codigosColor[turno];
             let todasEnBase = estadoFichas[actual].every(pos => pos === -1);
             
-            // Si el jugador local no tiene salida
             if (todasEnBase && valorDado !== 6 && valorDado !== 1) {
                 if (miColorIdx === turno) {
                     intentosSalida++;
@@ -374,24 +381,19 @@
                     else { setTimeout(() => enviarEvento({ tipo: 'REINTENTO_DADO' }), 1000); }
                 }
             } else {
-                // Se habilitan los clicks visualmente
                 actualizarEventosClic();
             }
         }
 
         function intentarMovimientoFicha(color, i) {
-            // Protección: Solo el dueño puede tocar su ficha cuando es su turno y ya tiró el dado
             if (miColorIdx === null || turno !== miColorIdx || valorDado === 0 || color !== codigosColor[turno]) return;
-            
             let posActual = estadoFichas[color][i];
-            if (posActual === -1 && valorDado !== 6 && valorDado !== 1) return; // No puede salir de base
-            
-            // Si es un click legal, avisamos al mundo qué ficha vamos a mover
+            if (posActual === -1 && valorDado !== 6 && valorDado !== 1) return; 
             enviarEvento({ tipo: 'MOVER', color: color, fichaIdx: i });
         }
 
         // ==========================================
-        // LA MATEMÁTICA PURA (SE EJECUTA PARA TODOS)
+        // LA MATEMÁTICA PURA & LOGICA DE FINALIZACIÓN
         // ==========================================
         function ejecutarMovimientoLocal(color, i) {
             let grupoKey = Object.keys(grupos).find(key => grupos[key].includes(`${color}-${i}`));
@@ -407,11 +409,29 @@
                 actualizarMetaUI(color);
                 
                 Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
+                
+                // Anotación en tabla
                 if (fichasEnMeta[color] >= 4 && !clasificacion.includes(color)) {
                     clasificacion.push(color);
                     actualizarClasificacion();
                 }
-                finalizarMovimientoPasoTurno(color);
+                
+                actualizarDistintivos();
+
+                // COMPROBACIÓN DE VICTORIA (EL GRAN FINAL)
+                let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
+                if (clasificacion.length >= objetivoMeta) {
+                    // Meter al último jugador restante en el último lugar
+                    let ultimo = codigosColor.find((c, idx) => coloresActivos.includes(idx) && !clasificacion.includes(c));
+                    if(ultimo && !clasificacion.includes(ultimo)) { 
+                        clasificacion.push(ultimo); 
+                        actualizarClasificacion(); 
+                    }
+                    mostrarPantallaFinal();
+                } else {
+                    finalizarMovimientoPasoTurno(color);
+                }
+
             } else {
                 fichasAMover.forEach(id => { 
                     let [c, idx] = id.split('-'); 
@@ -426,20 +446,40 @@
                 let todasEnDestino = [];
                 estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
 
-                // TU REGLA DE ORO DE SALIDA:
                 if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
                     if (miColorIdx === turno) {
                         decisionPendiente = { color, nuevaPos, todasEnDestino };
                         document.getElementById('modal-decision').style.display = 'block';
                     }
-                    // Los demás jugadores simplemente se quedan esperando viendo la pantalla, no se trancan
                 } else {
                     if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
                     verificarCaptura(color, nuevaPos);
                     finalizarMovimientoPasoTurno(color);
                 }
             }
-            actualizarDistintivos();
+        }
+
+        // ==========================================
+        // LA PANTALLA DE VICTORIA
+        // ==========================================
+        function mostrarPantallaFinal() {
+            detenerTemporizador();
+            document.getElementById('indicador-turno').innerHTML = `<span style="color:#f1c40f;">¡PARTIDA FINALIZADA!</span>`;
+            document.getElementById('indicador-turno').style.backgroundColor = '#2c3e50';
+            document.getElementById('btn-lanzar').disabled = true;
+
+            // Extraer el nombre del Primer Lugar
+            let ganadorColor = clasificacion[0];
+            let idxGanador = codigosColor.indexOf(ganadorColor);
+            let nickGanador = nombresJugadores[idxGanador] || ganadorColor;
+
+            document.getElementById('texto-ganador').innerHTML = `El ganador absoluto es:<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span>`;
+            
+            document.getElementById('modal-ganador').style.display = 'block';
+        }
+
+        function cerrarModalGanador() {
+            document.getElementById('modal-ganador').style.display = 'none';
         }
 
         function responderModalAcople(quiereAcoplar) {
@@ -458,7 +498,7 @@
         }
 
         function finalizarMovimientoPasoTurno(color) {
-            if (miColorIdx !== turno) return; // Solo el que juega toma la decisión del turno
+            if (miColorIdx !== turno) return; 
             
             if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) {
                 setTimeout(() => calcularSiguienteTurnoYEnviar(), 500);
@@ -497,7 +537,6 @@
                 for (let i = 0; i < 4; i++) {
                     const ficha = document.getElementById(`${c}-${i}`);
                     if (ficha) { 
-                        // Solo brillar si es turno Y hay valorDado (listo para mover)
                         ficha.style.pointerEvents = (c === codigosColor[turno] && !clasificacion.includes(c) && valorDado > 0) ? 'auto' : 'none'; 
                     }
                 }
@@ -521,11 +560,17 @@
         }
 
         function actualizarMetaUI(color) { const el = document.getElementById(`ui-${color}`); el.innerText = fichasEnMeta[color] > 0 ? fichasEnMeta[color] : ""; }
+        
         function actualizarClasificacion() {
             const lista = document.getElementById('lista-clasificacion'); lista.innerHTML = "";
             clasificacion.forEach((color, index) => {
                 const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderColor = color;
-                item.innerHTML = `<span>#${index + 1} Lugar</span> <span style="color:${color}">${color.toUpperCase()}</span>`;
+                
+                // Mostrar Nick en lugar de solo el color
+                let idxColor = codigosColor.indexOf(color);
+                let nickAMostrar = nombresJugadores[idxColor] || color;
+                
+                item.innerHTML = `<span>#${index + 1} Lugar</span> <span style="color:${color}; font-weight:bold;">${nickAMostrar.toUpperCase()}</span>`;
                 lista.appendChild(item);
             });
         }
@@ -538,15 +583,13 @@
                 ficha.style.top = coord[0] + "%"; ficha.style.left = coord[1] + "%";
                 ficha.dataset.baseX = coord[0]; ficha.dataset.baseY = coord[1];
                 ficha.id = `${color}-${i}`; 
-                // Enlace directo al nuevo modelo
                 ficha.onclick = () => intentarMovimientoFicha(color, i);
                 contenedor.appendChild(ficha);
             });
         }
 
-        function reiniciarJuego() { if (confirm("¿Reiniciar sala?")) { salaRef.remove().then(() => { location.search = ""; }); } }
+        function reiniciarJuego() { if (confirm("¿Abandonar y reiniciar sala?")) { salaRef.remove().then(() => { location.search = ""; }); } }
 
-        // Inicialización visual básica
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
     </script>
 </body>
