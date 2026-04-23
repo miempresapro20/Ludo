@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ludo Family: Motor V3.1 (Pop-up de Victoria y Podio Final)</title>
+    <title>Ludo Family: Motor V4.0 (Modo Local vs CPU Inteligente)</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -40,24 +40,13 @@
         .puesto-item { display: flex; justify-content: space-between; padding: 10px 20px; margin: 5px 0; border-radius: 8px; background: #34495e; border-left: 10px solid transparent; }
         
         .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; border-radius: 5px; border: none; font-weight: bold; }
+        .btn-grande { padding: 15px 30px; font-size: 18px; display: block; width: 100%; max-width: 300px; margin: 10px auto; }
         #botones-colores .btn:disabled { opacity: 0.3; cursor: not-allowed; }
         
         #alerta-flotante { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #f39c12; padding: 15px 30px; border-radius: 8px; z-index: 2000; font-weight: bold; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
 
-        #modal-decision { 
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            background: #2c3e50; border: 3px solid #f1c40f; padding: 20px; border-radius: 15px; 
-            z-index: 3000; display: none; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            width: 80%; max-width: 300px;
-        }
-
-        /* Novedad: Modal del Gran Ganador */
-        #modal-ganador {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #1a252f; border: 5px solid #f1c40f; padding: 40px; border-radius: 20px;
-            z-index: 4000; display: none; text-align: center; box-shadow: 0 0 50px rgba(241,196,15,0.4);
-            width: 90%; max-width: 400px;
-        }
+        #modal-decision { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2c3e50; border: 3px solid #f1c40f; padding: 20px; border-radius: 15px; z-index: 3000; display: none; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); width: 80%; max-width: 300px; }
+        #modal-ganador { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a252f; border: 5px solid #f1c40f; padding: 40px; border-radius: 20px; z-index: 4000; display: none; text-align: center; box-shadow: 0 0 50px rgba(241,196,15,0.4); width: 90%; max-width: 400px; }
     </style>
 </head>
 <body>
@@ -76,25 +65,41 @@
     </div>
 
     <div id="capa-lobby" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
-        <h2>Configuración de Partida</h2>
-        <div id="paso-1">
+        <h2>Ludo Family</h2>
+        
+        <div id="paso-0">
+            <button class="btn btn-grande" style="background: #8e44ad; color: white;" onclick="seleccionarModoJuego('local')">🕹️ JUGAR MODO LOCAL (vs CPU)</button>
+            <button class="btn btn-grande" style="background: #2980b9; color: white;" onclick="seleccionarModoJuego('online')">🌐 JUGAR ONLINE (Multijugador)</button>
+        </div>
+
+        <div id="paso-1" style="display: none;">
             <input type="text" id="input-nick" placeholder="Tu Apodo" style="padding: 10px; font-size: 18px; border-radius: 5px; border: none; width: 250px; text-align: center;"><br><br>
             <button class="btn" style="background: #3498db; color: white;" onclick="validarNick()">Siguiente</button>
         </div>
+
         <div id="paso-2" style="display: none;">
             <p id="info-sala" style="color: #f1c40f; font-weight: bold; font-size: 20px;"></p>
-            <p>Selecciona un color disponible:</p>
+            <p>Selecciona tu color:</p>
             <div id="botones-colores" style="display: flex; flex-direction: column; gap: 10px; max-width: 200px; margin: 0 auto;">
                 <button id="btn-color-0" class="btn" onclick="elegirColor(0)" style="background: green; color: white;">Verde</button>
                 <button id="btn-color-1" class="btn" onclick="elegirColor(1)" style="background: #f1c40f; color: black;">Amarillo</button>
                 <button id="btn-color-2" class="btn" onclick="elegirColor(2)" style="background: blue; color: white;">Azul</button>
                 <button id="btn-color-3" class="btn" onclick="elegirColor(3)" style="background: red; color: white;">Rojo</button>
             </div>
-            <p id="msg-espera" style="margin-top: 20px; font-style: italic; color: #bdc3c7;"></p>
-            <button id="btn-iniciar-partida" class="btn" style="display: none; background: #27ae60; color: white; margin-top: 15px;" onclick="iniciarPartidaOficial()">¡COMENZAR JUEGO!</button>
-            <div style="margin-top: 30px; background: #34495e; padding: 15px; border-radius: 8px;">
-                <p style="font-size: 14px; margin-top: 0;">Comparte este link para invitar:</p>
-                <input type="text" id="link-compartir" readonly style="width: 100%; padding: 8px; font-size: 12px; border-radius: 4px; border: none; text-align: center; color: #333;" onclick="this.select()">
+            
+            <div id="controles-online" style="display: none;">
+                <p id="msg-espera" style="margin-top: 20px; font-style: italic; color: #bdc3c7;"></p>
+                <button id="btn-iniciar-partida" class="btn" style="display: none; background: #27ae60; color: white; margin-top: 15px;" onclick="iniciarPartidaOnline()">¡COMENZAR JUEGO!</button>
+                <div style="margin-top: 30px; background: #34495e; padding: 15px; border-radius: 8px;">
+                    <p style="font-size: 14px; margin-top: 0;">Comparte este link para invitar:</p>
+                    <input type="text" id="link-compartir" readonly style="width: 100%; padding: 8px; font-size: 12px; border-radius: 4px; border: none; text-align: center; color: #333;" onclick="this.select()">
+                </div>
+            </div>
+
+            <div id="controles-local" style="display: none; margin-top: 20px;">
+                <p>¿Contra cuántos bots quieres jugar?</p>
+                <button class="btn" style="background: #27ae60; color: white;" onclick="iniciarPartidaLocal(2)">1 vs 1 (Carlos)</button>
+                <button class="btn" style="background: #e67e22; color: white;" onclick="iniciarPartidaLocal(4)">Todos contra Todos</button>
             </div>
         </div>
     </div>
@@ -110,13 +115,13 @@
 
     <div id="area-juego">
         <div id="indicador-turno" style="background-color: green;">
-            <span id="texto-turno">Esperando Jugadores...</span>
+            <span id="texto-turno">Esperando Configuración...</span>
             <span id="temporizador-ui" style="float: right;">⏱</span>
         </div>
         <img id="dado-img" src="" alt="Dado">
         <br>
         <button id="btn-lanzar" class="btn" style="background-color: #27ae60; color: white;" onclick="intentarLanzarDado()" disabled>Lanzar Dado</button>
-        <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Abandonar / Reiniciar</button>
+        <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Abandonar Partida</button>
         <div id="seccion-clasificacion">
             <h3 style="margin-top: 0;">Tabla de Posiciones</h3>
             <div id="lista-clasificacion"></div>
@@ -136,10 +141,16 @@
         const db = firebase.database();
         
         let partidaRef; 
+        let salaRef;
+        let jugadoresRef;
+        
+        let modoJuego = ''; // 'local' o 'online'
+        let esModoLocal = false; 
+        
         let miColorIdx = null; 
         let apodo = "";
         let coloresActivos = []; 
-        let nombresJugadores = {}; // Diccionario global para guardar Nombres
+        let nombresJugadores = {}; 
         let soyElHost = false;   
         
         const urlParams = new URLSearchParams(window.location.search);
@@ -149,9 +160,6 @@
         const linkCompleto = window.location.origin + window.location.pathname + "?sala=" + idSala;
         document.getElementById('link-compartir').value = linkCompleto;
 
-        const salaRef = db.ref('salas/' + idSala);
-        const jugadoresRef = salaRef.child('jugadores');
-
         function mostrarAlerta(mensaje) {
             const alerta = document.getElementById('alerta-flotante');
             alerta.innerText = mensaje;
@@ -159,16 +167,37 @@
             setTimeout(() => alerta.style.display = 'none', 3000);
         }
 
+        // --- FLUJO DEL LOBBY MULTI-MODO ---
+        function seleccionarModoJuego(modo) {
+            modoJuego = modo;
+            esModoLocal = (modo === 'local');
+            document.getElementById('paso-0').style.display = 'none';
+            document.getElementById('paso-1').style.display = 'block';
+            
+            if (esModoLocal) {
+                document.getElementById('controles-local').style.display = 'block';
+            } else {
+                document.getElementById('controles-online').style.display = 'block';
+                salaRef = db.ref('salas/' + idSala);
+                jugadoresRef = salaRef.child('jugadores');
+            }
+        }
+
         function validarNick() {
             apodo = document.getElementById('input-nick').value.trim();
             if (apodo.length < 2) return alert("Por favor, escribe un apodo válido.");
             document.getElementById('paso-1').style.display = 'none';
             document.getElementById('paso-2').style.display = 'block';
-            document.getElementById('info-sala').innerText = "Sala: " + idSala;
-            escucharJugadoresLobby();
+            
+            if (esModoLocal) {
+                document.getElementById('info-sala').innerText = "Modo Local VS CPU";
+            } else {
+                document.getElementById('info-sala').innerText = "Sala Online: " + idSala;
+                escucharJugadoresLobbyOnline();
+            }
         }
 
-        function escucharJugadoresLobby() {
+        function escucharJugadoresLobbyOnline() {
             jugadoresRef.on('value', (snapshot) => {
                 const jugadores = snapshot.val() || {};
                 const coloresLocales = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
@@ -194,33 +223,57 @@
 
         function elegirColor(idx) {
             miColorIdx = idx;
-            jugadoresRef.push({ nick: apodo, colorIdx: idx });
-            document.getElementById('botones-colores').style.display = 'none';
-            document.getElementById('msg-espera').innerText = "Esperando inicio...";
+            if (!esModoLocal) {
+                jugadoresRef.push({ nick: apodo, colorIdx: idx });
+                document.getElementById('botones-colores').style.display = 'none';
+                document.getElementById('msg-espera').innerText = "Esperando inicio...";
+            } else {
+                document.getElementById('botones-colores').style.display = 'none';
+            }
         }
 
-        function iniciarPartidaOficial() {
+        // Inicio Online
+        function iniciarPartidaOnline() {
             jugadoresRef.once('value').then(snapshot => {
                 const jugadores = snapshot.val() || {};
-                let activos = [];
-                let nicksMap = {};
-                
-                Object.values(jugadores).forEach(j => {
-                    activos.push(j.colorIdx);
-                    nicksMap[j.colorIdx] = j.nick;
-                });
+                let activos = []; let nicksMap = {};
+                Object.values(jugadores).forEach(j => { activos.push(j.colorIdx); nicksMap[j.colorIdx] = j.nick; });
                 activos.sort((a,b) => a-b);
-                
                 db.ref('salas/' + idSala + '/partida/ultimoEvento').set({
-                    id: Date.now() + "_start",
-                    tipo: 'START',
-                    activos: activos,
-                    nicksMap: nicksMap,
-                    turnoInicial: activos[0]
+                    id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0]
                 }).then(() => { salaRef.update({ estado: 'jugando' }); });
             });
         }
 
+        // Inicio Local
+        function iniciarPartidaLocal(numJugadores) {
+            let activos = [];
+            let nicksMap = {};
+            let nombresBots = ['Carlos', 'David', 'Luis'];
+            let bIndex = 0;
+
+            activos.push(miColorIdx);
+            nicksMap[miColorIdx] = apodo;
+
+            if (numJugadores === 2) {
+                let opuesto = (miColorIdx + 2) % 4; // Color de enfrente
+                activos.push(opuesto);
+                nicksMap[opuesto] = nombresBots[0] + " (CPU)";
+            } else {
+                for (let i = 0; i < 4; i++) {
+                    if (i !== miColorIdx) { activos.push(i); nicksMap[i] = nombresBots[bIndex++] + " (CPU)"; }
+                }
+            }
+            activos.sort((a,b) => a-b);
+            document.getElementById('capa-lobby').style.display = 'none';
+            
+            // Auto-disparamos el evento sin usar Firebase
+            distribuirEvento({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] });
+        }
+
+        // ==========================================
+        // SISTEMA WALKIE-TALKIE ADAPTATIVO
+        // ==========================================
         let ultimoEventoId = null;
 
         function conectarMotorAFirebase() {
@@ -233,10 +286,15 @@
             });
         }
 
-        function enviarEvento(datos) {
-            if (!partidaRef) return;
-            datos.id = Date.now() + "_" + Math.random().toString(36).substr(2, 5); 
-            partidaRef.child('ultimoEvento').set(datos);
+        function distribuirEvento(datos) {
+            datos.id = Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+            if (esModoLocal) {
+                // Bypass absoluto de internet
+                setTimeout(() => procesarEventoRemoto(datos), 50);
+            } else {
+                if (!partidaRef) return;
+                partidaRef.child('ultimoEvento').set(datos);
+            }
         }
 
         function procesarEventoRemoto(ev) {
@@ -245,19 +303,15 @@
                     coloresActivos = ev.activos;
                     nombresJugadores = ev.nicksMap || {};
                     turno = ev.turnoInicial;
-                    soyElHost = (miColorIdx === coloresActivos[0]);
+                    soyElHost = true; // En local y el creador online siempre asumen responsabilidad de bots/tiempo
                     
                     codigosColor.forEach(c => {
                         if (!coloresActivos.includes(codigosColor.indexOf(c))) {
-                            for(let i=0; i<4; i++) {
-                                let f = document.getElementById(`${c}-${i}`);
-                                if(f) f.style.display = 'none';
-                            }
+                            for(let i=0; i<4; i++) { let f = document.getElementById(`${c}-${i}`); if(f) f.style.display = 'none'; }
                         }
                     });
                     reiniciarTurnoVisual();
                     break;
-                    
                 case 'DADO':
                     valorDado = ev.valor;
                     document.getElementById('dado-img').src = `imagen/dado_${valorDado}.png`;
@@ -265,27 +319,19 @@
                     document.getElementById('btn-lanzar').disabled = true;
                     evaluarOpcionesDespuesDelDado();
                     break;
-                    
                 case 'REINTENTO_DADO':
-                    valorDado = 0;
-                    document.getElementById('dado-img').style.display = 'none';
+                    valorDado = 0; document.getElementById('dado-img').style.display = 'none';
                     if (miColorIdx === turno) document.getElementById('btn-lanzar').disabled = false;
                     limiteTurnoMs = Date.now() + 30000; 
+                    if (esModoLocal && turno !== miColorIdx) setTimeout(intentarLanzarDado, 1000); // Bot tira de nuevo
                     break;
-                    
-                case 'MOVER':
-                    ejecutarMovimientoLocal(ev.color, ev.fichaIdx);
-                    break;
-                    
+                case 'MOVER': ejecutarMovimientoLocal(ev.color, ev.fichaIdx); break;
                 case 'ACOPLE':
                     document.getElementById('modal-decision').style.display = 'none';
                     resolverAcoplamientoMatematico(ev.color, ev.nuevaPos, ev.decision);
                     break;
-                    
                 case 'PASAR_TURNO':
-                    turno = ev.siguienteTurno;
-                    intentosSalida = 0;
-                    valorDado = 0;
+                    turno = ev.siguienteTurno; intentosSalida = 0; valorDado = 0;
                     document.getElementById('dado-img').style.display = 'none';
                     document.getElementById('modal-decision').style.display = 'none';
                     decisionPendiente = null;
@@ -295,7 +341,63 @@
         }
 
         // ==========================================
-        // VARIABLES Y RUTAS LOCALES (INTACTAS)
+        // CEREBRO DE LA INTELIGENCIA ARTIFICIAL (Bots Cazadores)
+        // ==========================================
+        function ejecutarCerebroBot(color) {
+            let opciones = [];
+            for (let i = 0; i < 4; i++) {
+                let pos = estadoFichas[color][i];
+                if (pos >= rutas[color].length - 1) continue; // Ficha en meta
+                
+                if (pos === -1 && (valorDado === 1 || valorDado === 6)) {
+                    opciones.push({ idx: i, accion: 'salir', posActual: -1, nuevaPos: COORDENADA_SALIDA });
+                } else if (pos > -1) {
+                    let np = pos + valorDado;
+                    if (np >= rutas[color].length) np = (rutas[color].length - 1) - (np - (rutas[color].length - 1));
+                    opciones.push({ idx: i, accion: 'mover', posActual: pos, nuevaPos: np });
+                }
+            }
+
+            if (opciones.length > 0) {
+                let eleccion = opciones[0]; // Por defecto la primera que vea
+                
+                let salida = opciones.find(o => o.accion === 'salir');
+                let cazador = opciones.find(o => compruebaCapturaSimulada(color, o.nuevaPos));
+                
+                // Prioridad Estricta:
+                if (salida) eleccion = salida; // 1. Salir a jugar
+                else if (cazador) eleccion = cazador; // 2. Matar
+                else {
+                    // 3. Mover la ficha que esté más cerca de la meta
+                    opciones.sort((a,b) => b.posActual - a.posActual);
+                    eleccion = opciones[0];
+                }
+                
+                distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: eleccion.idx });
+            }
+        }
+
+        function compruebaCapturaSimulada(color, posActual) {
+            const posCoords = rutas[color][posActual];
+            const margen = 2.0;
+            let esZonaSegura = codigosColor.some(c => { let est = rutas[c][COORDENADA_SALIDA]; return Math.abs(est[0] - posCoords[0]) < margen && Math.abs(est[1] - posCoords[1]) < margen; });
+            if (esZonaSegura) return false;
+
+            for (let c of codigosColor) {
+                if (c === color) continue;
+                for (let p of estadoFichas[c]) {
+                    if (p === -1 || p >= rutas[c].length - 1) continue;
+                    let pEnemigo = rutas[c][p];
+                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) {
+                        return true; // Hay un enemigo exactamente ahí
+                    }
+                }
+            }
+            return false;
+        }
+
+        // ==========================================
+        // VARIABLES Y RUTAS LOCALES 
         // ==========================================
         let turno = 0; let valorDado = 0; let intentosSalida = 0;
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
@@ -303,9 +405,7 @@
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
         const COORDENADA_SALIDA = 4;
-        let limiteTurnoMs = 0;
-        let intervaloTemporizador;
-        let decisionPendiente = null;
+        let limiteTurnoMs = 0; let intervaloTemporizador; let decisionPendiente = null;
 
         const rutas = {
             'red': [[72.0, 28.5], [71.9, 12.2], [87.3, 14.1], [87.8, 29.0], [89.8, 44.1], [83.1, 43.9], [75.8, 44.0], [69.1, 44.1], [63.2, 44.6], [56.3, 37.6], [55.9, 30.6], [56.0, 23.9], [56.1, 17.3], [56.1, 11.0], [56.4, 4.4], [49.9, 4.2], [43.5, 3.7], [43.6, 10.4], [43.3, 18.4], [43.2, 24.4], [43.3, 30.6], [43.6, 38.1], [36.8, 44.3], [29.7, 43.9], [23.1, 44.0], [16.9, 44.1], [10.0, 44.1], [3.5, 44.2], [3.8, 50.8], [3.6, 57.5], [9.7, 57.1], [16.9, 57.9], [24.1, 58.0], [30.0, 57.5], [37.0, 56.8], [43.6, 63.9], [43.6, 70.6], [43.7, 77.0], [43.4, 84.4], [43.7, 90.9], [43.4, 97.1], [49.7, 96.6], [56.5, 96.5], [56.8, 90.6], [56.5, 83.4], [57.5, 76.8], [56.9, 70.2], [56.9, 63.8], [63.8, 56.7], [69.8, 57.0], [76.4, 57.3], [82.4, 57.5], [89.1, 57.1], [96.0, 57.9], [96.2, 50.7], [89.0, 50.7], [83.2, 50.3], [76.4, 50.6], [68.9, 51.0], [62.9, 51.2], [55.9, 51.0]],
@@ -316,13 +416,14 @@
         let estadoFichas = {}; codigosColor.forEach(c => estadoFichas[c] = [-1, -1, -1, -1]);
 
         // ==========================================
-        // FUNCIONES DE CONTROL LOCAL
+        // LÓGICA DE TURNOS 
         // ==========================================
         function reiniciarTurnoVisual() {
             let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
-            if (clasificacion.length >= objetivoMeta) return; // Si ya se acabó, no reiniciar
+            if (clasificacion.length >= objetivoMeta) return; 
             
-            document.getElementById('indicador-turno').innerHTML = `<span>Turno: ${colores[turno]}</span><span id="temporizador-ui" style="float: right;">⏱</span>`;
+            let nickActual = nombresJugadores[turno] || colores[turno];
+            document.getElementById('indicador-turno').innerHTML = `<span>Turno: ${nickActual}</span><span id="temporizador-ui" style="float: right;">⏱</span>`;
             document.getElementById('indicador-turno').style.backgroundColor = codigosColor[turno];
             
             document.getElementById('btn-lanzar').disabled = (miColorIdx !== turno);
@@ -330,6 +431,11 @@
             
             limiteTurnoMs = Date.now() + 30000;
             iniciarTemporizador();
+
+            // Si es un bot en Modo Local, lanza el dado automáticamente
+            if (esModoLocal && turno !== miColorIdx) {
+                setTimeout(intentarLanzarDado, 1500); 
+            }
         }
 
         function iniciarTemporizador() {
@@ -343,9 +449,7 @@
                 
                 if (tiempoRestante <= 0) {
                     clearInterval(intervaloTemporizador);
-                    if (miColorIdx === turno || soyElHost) {
-                        calcularSiguienteTurnoYEnviar();
-                    }
+                    if (miColorIdx === turno || soyElHost) calcularSiguienteTurnoYEnviar();
                 }
             }, 1000);
         }
@@ -361,13 +465,15 @@
             do { proxTurno = (proxTurno + 1) % 4; turnosBuscados++; } 
             while ((!coloresActivos.includes(proxTurno) || clasificacion.includes(codigosColor[proxTurno])) && turnosBuscados < 4);
             
-            enviarEvento({ tipo: 'PASAR_TURNO', siguienteTurno: proxTurno });
+            distribuirEvento({ tipo: 'PASAR_TURNO', siguienteTurno: proxTurno });
         }
 
         function intentarLanzarDado() {
-            if (miColorIdx === null || turno !== miColorIdx) return;
+            // Protección: Solo dispara si es turno del jugador, o si es un bot en modo local
+            if (turno !== miColorIdx && !(esModoLocal && turno !== miColorIdx)) return;
+            
             let valor = Math.floor(Math.random() * 6) + 1;
-            enviarEvento({ tipo: 'DADO', valor: valor }); 
+            distribuirEvento({ tipo: 'DADO', valor: valor }); 
         }
 
         function evaluarOpcionesDespuesDelDado() {
@@ -375,13 +481,17 @@
             let todasEnBase = estadoFichas[actual].every(pos => pos === -1);
             
             if (todasEnBase && valorDado !== 6 && valorDado !== 1) {
-                if (miColorIdx === turno) {
+                if (miColorIdx === turno || (esModoLocal && soyElHost && turno !== miColorIdx)) {
                     intentosSalida++;
                     if (intentosSalida >= 3) { setTimeout(() => calcularSiguienteTurnoYEnviar(), 1000); }
-                    else { setTimeout(() => enviarEvento({ tipo: 'REINTENTO_DADO' }), 1000); }
+                    else { setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 1000); }
                 }
             } else {
                 actualizarEventosClic();
+                // Si es un bot en Modo Local, ejecuta su cerebro
+                if (esModoLocal && turno !== miColorIdx) {
+                    setTimeout(() => ejecutarCerebroBot(actual), 1500);
+                }
             }
         }
 
@@ -389,7 +499,7 @@
             if (miColorIdx === null || turno !== miColorIdx || valorDado === 0 || color !== codigosColor[turno]) return;
             let posActual = estadoFichas[color][i];
             if (posActual === -1 && valorDado !== 6 && valorDado !== 1) return; 
-            enviarEvento({ tipo: 'MOVER', color: color, fichaIdx: i });
+            distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: i });
         }
 
         // ==========================================
@@ -410,27 +520,19 @@
                 
                 Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
                 
-                // Anotación en tabla
                 if (fichasEnMeta[color] >= 4 && !clasificacion.includes(color)) {
                     clasificacion.push(color);
                     actualizarClasificacion();
                 }
                 
                 actualizarDistintivos();
-
-                // COMPROBACIÓN DE VICTORIA (EL GRAN FINAL)
                 let objetivoMeta = coloresActivos.length > 1 ? coloresActivos.length - 1 : 1;
+                
                 if (clasificacion.length >= objetivoMeta) {
-                    // Meter al último jugador restante en el último lugar
                     let ultimo = codigosColor.find((c, idx) => coloresActivos.includes(idx) && !clasificacion.includes(c));
-                    if(ultimo && !clasificacion.includes(ultimo)) { 
-                        clasificacion.push(ultimo); 
-                        actualizarClasificacion(); 
-                    }
+                    if(ultimo && !clasificacion.includes(ultimo)) { clasificacion.push(ultimo); actualizarClasificacion(); }
                     mostrarPantallaFinal();
-                } else {
-                    finalizarMovimientoPasoTurno(color);
-                }
+                } else { finalizarMovimientoPasoTurno(color); }
 
             } else {
                 fichasAMover.forEach(id => { 
@@ -447,9 +549,11 @@
                 estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
 
                 if (todasEnDestino.length > 1 && nuevaPos === COORDENADA_SALIDA) {
-                    if (miColorIdx === turno) {
+                    if (miColorIdx === turno) { // Humano
                         decisionPendiente = { color, nuevaPos, todasEnDestino };
                         document.getElementById('modal-decision').style.display = 'block';
+                    } else if (esModoLocal && turno !== miColorIdx) { // Bot auto-acopla
+                        distribuirEvento({ tipo: 'ACOPLE', color: color, nuevaPos: nuevaPos, decision: true });
                     }
                 } else {
                     if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
@@ -460,7 +564,7 @@
         }
 
         // ==========================================
-        // LA PANTALLA DE VICTORIA
+        // LA PANTALLA DE VICTORIA Y UTILIDADES
         // ==========================================
         function mostrarPantallaFinal() {
             detenerTemporizador();
@@ -468,23 +572,19 @@
             document.getElementById('indicador-turno').style.backgroundColor = '#2c3e50';
             document.getElementById('btn-lanzar').disabled = true;
 
-            // Extraer el nombre del Primer Lugar
             let ganadorColor = clasificacion[0];
             let idxGanador = codigosColor.indexOf(ganadorColor);
             let nickGanador = nombresJugadores[idxGanador] || ganadorColor;
 
             document.getElementById('texto-ganador').innerHTML = `El ganador absoluto es:<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span>`;
-            
             document.getElementById('modal-ganador').style.display = 'block';
         }
 
-        function cerrarModalGanador() {
-            document.getElementById('modal-ganador').style.display = 'none';
-        }
+        function cerrarModalGanador() { document.getElementById('modal-ganador').style.display = 'none'; }
 
         function responderModalAcople(quiereAcoplar) {
             if (!decisionPendiente) return;
-            enviarEvento({ tipo: 'ACOPLE', color: decisionPendiente.color, nuevaPos: decisionPendiente.nuevaPos, decision: quiereAcoplar });
+            distribuirEvento({ tipo: 'ACOPLE', color: decisionPendiente.color, nuevaPos: decisionPendiente.nuevaPos, decision: quiereAcoplar });
         }
 
         function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
@@ -498,12 +598,13 @@
         }
 
         function finalizarMovimientoPasoTurno(color) {
-            if (miColorIdx !== turno) return; 
+            // Solo quien movió evalúa qué pasa a continuación
+            if (miColorIdx !== turno && !(esModoLocal && soyElHost)) return; 
             
             if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) {
                 setTimeout(() => calcularSiguienteTurnoYEnviar(), 500);
             } else {
-                setTimeout(() => enviarEvento({ tipo: 'REINTENTO_DADO' }), 500);
+                setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 500);
             }
         }
 
@@ -529,16 +630,11 @@
             });
         }
 
-        // ==========================================
-        // UI & HERRAMIENTAS
-        // ==========================================
         function actualizarEventosClic() {
             codigosColor.forEach(c => {
                 for (let i = 0; i < 4; i++) {
                     const ficha = document.getElementById(`${c}-${i}`);
-                    if (ficha) { 
-                        ficha.style.pointerEvents = (c === codigosColor[turno] && !clasificacion.includes(c) && valorDado > 0) ? 'auto' : 'none'; 
-                    }
+                    if (ficha) { ficha.style.pointerEvents = (c === codigosColor[turno] && !clasificacion.includes(c) && valorDado > 0) ? 'auto' : 'none'; }
                 }
             });
         }
@@ -565,11 +661,8 @@
             const lista = document.getElementById('lista-clasificacion'); lista.innerHTML = "";
             clasificacion.forEach((color, index) => {
                 const item = document.createElement('div'); item.className = 'puesto-item'; item.style.borderColor = color;
-                
-                // Mostrar Nick en lugar de solo el color
                 let idxColor = codigosColor.indexOf(color);
                 let nickAMostrar = nombresJugadores[idxColor] || color;
-                
                 item.innerHTML = `<span>#${index + 1} Lugar</span> <span style="color:${color}; font-weight:bold;">${nickAMostrar.toUpperCase()}</span>`;
                 lista.appendChild(item);
             });
@@ -588,7 +681,12 @@
             });
         }
 
-        function reiniciarJuego() { if (confirm("¿Abandonar y reiniciar sala?")) { salaRef.remove().then(() => { location.search = ""; }); } }
+        function reiniciarJuego() { 
+            if (confirm("¿Abandonar partida?")) { 
+                if(!esModoLocal) salaRef.remove().then(() => { location.search = ""; });
+                else location.search = "";
+            } 
+        }
 
         codigosColor.forEach(c => crearFichasBase(rutas[c], c));
     </script>
