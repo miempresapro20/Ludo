@@ -628,6 +628,7 @@
         function procesarEventoRemoto(ev) {
             switch(ev.tipo) {
                 case 'START':
+                    partidaTerminada = false;
                     coloresActivos = ev.activos; 
                     nombresJugadores = ev.nicksMap || {}; 
                     globalIdsJugadores = ev.globalIdsMap || {};
@@ -695,6 +696,7 @@
                     reiniciarTurnoVisual();
                     break;
                 case 'REVANCHA':
+                    partidaTerminada = false;
                     rondaActual++;
                     ejecutarLimpiezaRevancha(ev.primerTurno);
                     break;
@@ -758,8 +760,12 @@
                     }
                 } else {
                     let np = pos + valorDado;
-                    if (np >= rutas[color].length) np = (rutas[color].length - 1) - (np - (rutas[color].length - 1));
-                    opciones.push({ idx: i, accion: 'mover', posActual: pos, nuevaPos: np, esPasillo: fichasEnPasillo.includes(i) });
+                    let rebotaria = false;
+                    if (np >= rutas[color].length) {
+                        np = (rutas[color].length - 1) - (np - (rutas[color].length - 1));
+                        rebotaria = true;
+                    }
+                    opciones.push({ idx: i, accion: 'mover', posActual: pos, nuevaPos: np, esPasillo: fichasEnPasillo.includes(i), rebota: rebotaria });
                 }
             }
 
@@ -772,14 +778,23 @@
                 opciones.forEach(o => {
                     let pts = 0;
                     
-                    if (o.nuevaPos === rutas[color].length - 1) pts += 1000 * multCorrer;
+                    if (o.nuevaPos === rutas[color].length - 1) {
+                        pts += 5000 * multCorrer; // Prioridad absoluta: si puede entrar a la meta, que lo haga de inmediato.
+                    }
                     
                     if (o.accion === 'salir') {
                         pts += 300 * multCorrer;
                         if (fichasEnAlcabala === 0) pts += 1500 * multDefensa; 
                     }
                     
-                    if (o.esPasillo) pts += 500 * multCorrer;
+                    // Si el movimiento hace que la ficha rebote en la meta, penalizar fuertemente
+                    if (o.rebota) {
+                        pts -= 3000;
+                    } else if (o.esPasillo && o.nuevaPos !== rutas[color].length - 1) {
+                        // Si está en el pasillo seguro pero no llega a la meta, 
+                        // tiene menor prioridad que salvar piezas vulnerables afuera.
+                        pts -= 500;
+                    }
                     
                     let presa = compruebaCapturaSimulada(color, o.nuevaPos);
                     
@@ -869,6 +884,7 @@
         let fichasEnMeta = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 };
         let clasificacion = []; let grupos = {}; 
         let puntosTorneo = { 'green': 0, 'yellow': 0, 'blue': 0, 'red': 0 }; 
+        let partidaTerminada = false;
 
         const colores = ['Verde', 'Amarillo', 'Azul', 'Rojo'];
         const codigosColor = ['green', 'yellow', 'blue', 'red'];
@@ -937,6 +953,7 @@
         }
 
         function intentarLanzarDado(esAuto = false) {
+            if (partidaTerminada) return;
             if (turno !== miColorIdx && !(esModoLocal && turno !== miColorIdx) && !esAuto) return;
             let valor = Math.floor(Math.random() * 6) + 1;
             distribuirEvento({ tipo: 'DADO', valor: valor, auto: esAuto, colorActor: turno }); 
@@ -1053,6 +1070,9 @@
         // TABLAS Y TORNEO 
         // ==========================================
         function mostrarPantallaFinal() {
+            if (partidaTerminada) return;
+            partidaTerminada = true;
+            
             detenerTemporizador();
             document.getElementById('indicador-turno').innerHTML = `<span style="color:#f1c40f;">¡PARTIDA FINALIZADA!</span>`;
             document.getElementById('indicador-turno').style.backgroundColor = '#2c3e50';
