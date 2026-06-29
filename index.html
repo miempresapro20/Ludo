@@ -310,49 +310,66 @@
                 }
             });
 
-            let savedToken = localStorage.getItem('ludo_token_' + idSala);
-            let savedColor = localStorage.getItem('ludo_color_' + idSala);
+            let savedToken = idSala ? localStorage.getItem('ludo_token_' + idSala) : null;
+            let savedColor = idSala ? localStorage.getItem('ludo_color_' + idSala) : null;
             
-            if (savedToken && savedColor !== null) {
-                db.ref('salas/' + idSala + '/jugadores').once('value').then(snap => {
-                    let j = snap.val(); let found = false;
-                    if (j) {
+            if (idSala) {
+                db.ref('salas/' + idSala).once('value').then(snapSala => {
+                    let salaDatos = snapSala.val();
+                    
+                    if (!salaDatos) {
+                        mostrarAlerta("La sala no existe o ha sido cerrada.");
+                        window.history.replaceState(null, '', window.location.pathname);
+                        idSala = null;
+                        return;
+                    }
+                    
+                    let j = salaDatos.jugadores || {}; 
+                    let found = false;
+                    
+                    if (savedToken && savedColor !== null) {
                         Object.values(j).forEach(jugador => {
                             if (jugador.token === savedToken) {
                                 found = true; miColorIdx = parseInt(savedColor); apodo = jugador.nick;
                             }
                         });
                     }
+                    
                     if (found) {
                         solicitarWakeLock(); 
                         esModoLocal = false; 
                         
-                        db.ref('salas/' + idSala + '/estado').once('value').then(snapEstado => {
-                            if (snapEstado.val() === 'jugando') {
-                                document.getElementById('paso-0').style.display = 'none';
-                                document.getElementById('capa-lobby').innerHTML = '<h2 style="color:#f1c40f">Reconectando a tu asiento...</h2>';
-                                conectarMotorAFirebase();
-                            } else {
-                                // Reconectando al lobby
-                                document.getElementById('paso-0').style.display = 'none';
-                                document.getElementById('paso-1').style.display = 'none';
-                                document.getElementById('paso-2').style.display = 'block';
-                                document.getElementById('info-sala').innerText = "Sala Online: " + idSala;
-                                document.getElementById('botones-colores').style.display = 'none';
-                                document.getElementById('controles-online').style.display = 'block'; 
-                                salaRef = db.ref('salas/' + idSala); 
-                                jugadoresRef = salaRef.child('jugadores'); 
-                                escucharJugadoresLobbyOnline();
-                            }
-                        });
+                        if (salaDatos.estado === 'jugando') {
+                            document.getElementById('paso-0').style.display = 'none';
+                            document.getElementById('capa-lobby').innerHTML = '<h2 style="color:#f1c40f">Reconectando a tu asiento...</h2>';
+                            conectarMotorAFirebase();
+                        } else {
+                            // Reconectando al lobby
+                            document.getElementById('paso-0').style.display = 'none';
+                            document.getElementById('paso-1').style.display = 'none';
+                            document.getElementById('paso-2').style.display = 'block';
+                            document.getElementById('info-sala').innerText = "Sala Online: " + idSala;
+                            document.getElementById('botones-colores').style.display = 'none';
+                            document.getElementById('controles-online').style.display = 'block'; 
+                            salaRef = db.ref('salas/' + idSala); 
+                            jugadoresRef = salaRef.child('jugadores'); 
+                            escucharJugadoresLobbyOnline();
+                        }
                     } else {
-                        localStorage.removeItem('ludo_token_' + idSala);
-                        localStorage.removeItem('ludo_color_' + idSala);
-                        if (urlParams.has('sala')) seleccionarModoJuego('online');
+                        if (savedToken) {
+                            localStorage.removeItem('ludo_token_' + idSala);
+                            localStorage.removeItem('ludo_color_' + idSala);
+                        }
+                        
+                        if (salaDatos.estado === 'jugando') {
+                            mostrarAlerta("La partida ya está en curso.");
+                            window.history.replaceState(null, '', window.location.pathname);
+                            idSala = null;
+                        } else {
+                            seleccionarModoJuego('online');
+                        }
                     }
                 });
-            } else {
-                if (urlParams.has('sala')) seleccionarModoJuego('online');
             }
         };
 
