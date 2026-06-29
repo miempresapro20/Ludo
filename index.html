@@ -177,6 +177,8 @@
             <button id="btn-reiniciar" class="btn" style="background-color: #e74c3c; color: white;" onclick="reiniciarJuego()">Abandonar</button>
         </div>
 
+        <div id="perfiles-jugadores" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;"></div>
+
         <div id="contenedor-tablas">
             <div class="seccion-tabla">
                 <h3 style="margin-top: 0;">Ronda Actual</h3>
@@ -186,6 +188,28 @@
                 <h3 style="margin-top: 0; color: #f1c40f;">Ranking Torneo 🏆</h3>
                 <div id="lista-torneo"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Perfil -->
+    <div id="modal-perfil" class="modal">
+        <div class="modal-contenido" style="text-align: center;">
+            <h2 id="perfil-nick">Jugador</h2>
+            <div style="display: flex; justify-content: space-around; margin: 20px 0;">
+                <div>
+                    <h3 style="margin: 0; color: #27ae60; font-size: 28px;" id="perfil-winrate">0%</h3>
+                    <small>Efectividad</small>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #3498db; font-size: 28px;" id="perfil-jugadas">0</h3>
+                    <small>Partidas</small>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #e74c3c; font-size: 28px;" id="perfil-victorias">0</h3>
+                    <small>Victorias</small>
+                </div>
+            </div>
+            <button class="btn" style="background: #34495e; color: white; margin-top: 15px;" onclick="document.getElementById('modal-perfil').style.display='none'">Cerrar</button>
         </div>
     </div>
 
@@ -205,12 +229,14 @@
         let modoJuego = ''; let esModoLocal = false; 
         
         let miColorIdx = null; let apodo = "";
-        let coloresActivos = []; let nombresJugadores = {}; 
+        let coloresActivos = []; let nombresJugadores = {}; let globalIdsJugadores = {};
         let soyElHost = false;   
         
         let strikesJugadores = {0:0, 1:0, 2:0, 3:0};
         let botVendettas = {};
         let botPersonalidades = {};
+        
+        let miGlobalId = null;
 
         const urlParams = new URLSearchParams(window.location.search);
         let idSala = urlParams.get('sala');
@@ -248,6 +274,12 @@
         // SISTEMA DE TICKET (Reconexión Silenciosa)
         // ==========================================
         window.onload = () => {
+            miGlobalId = localStorage.getItem('ludo_global_id');
+            if (!miGlobalId) {
+                miGlobalId = "USER_" + Date.now().toString(36) + Math.random().toString(36).substr(2);
+                localStorage.setItem('ludo_global_id', miGlobalId);
+            }
+
             let savedToken = localStorage.getItem('ludo_token_' + idSala);
             let savedColor = localStorage.getItem('ludo_color_' + idSala);
             
@@ -344,8 +376,8 @@
                 let myToken = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 localStorage.setItem('ludo_token_' + idSala, myToken);
                 localStorage.setItem('ludo_color_' + idSala, idx);
-                jugadoresRef.push({ nick: apodo, colorIdx: idx, token: myToken }); 
-                document.getElementById('botones-colores').style.display = 'none'; 
+                jugadoresRef.push({ nick: apodo, colorIdx: idx, token: myToken, globalId: miGlobalId }); 
+                document.getElementById('botones-colores').style.display = 'none';  
                 document.getElementById('msg-espera').innerText = "Esperando inicio..."; 
             } else { document.getElementById('botones-colores').style.display = 'none'; }
         }
@@ -353,11 +385,11 @@
         function iniciarPartidaOnline(conBots) {
             jugadoresRef.once('value').then(snapshot => {
                 const jugadores = snapshot.val() || {};
-                let activos = []; let nicksMap = {};
+                let activos = []; let nicksMap = {}; let globalIdsMap = {};
                 let nombresBots = ['Carlos (Bot)', 'David (Bot)', 'Luis (Bot)']; let bIndex = 0;
                 let strikesIniciales = {0:0, 1:0, 2:0, 3:0};
                 
-                Object.values(jugadores).forEach(j => { activos.push(j.colorIdx); nicksMap[j.colorIdx] = j.nick; });
+                Object.values(jugadores).forEach(j => { activos.push(j.colorIdx); nicksMap[j.colorIdx] = j.nick; globalIdsMap[j.colorIdx] = j.globalId; });
                 
                 if (!conBots && activos.length < 2) {
                     return mostrarAlerta("Necesitas al menos 2 jugadores reales para jugar sin bots.");
@@ -368,7 +400,8 @@
                         if (!activos.includes(i)) {
                             activos.push(i);
                             nicksMap[i] = nombresBots[bIndex++];
-                            strikesIniciales[i] = 2; // Nacen como fantasmas para que el Host asuma su IA
+                            globalIdsMap[i] = 'bot';
+                            strikesIniciales[i] = 2;
                         }
                     }
                 }
@@ -381,6 +414,7 @@
                         tipo: 'START', 
                         activos: activos, 
                         nicksMap: nicksMap, 
+                        globalIdsMap: globalIdsMap,
                         turnoInicial: activos[0],
                         strikesBots: strikesIniciales
                     }).then(() => { salaRef.update({ estado: 'jugando' }); });
@@ -390,15 +424,15 @@
 
         function iniciarPartidaLocal(numJugadores) {
             if (miColorIdx === null) return mostrarAlerta("¡Debes seleccionar tu color primero!");
-            let activos = []; let nicksMap = {}; let nombresBots = ['Carlos', 'David', 'Luis']; let bIndex = 0;
-            activos.push(miColorIdx); nicksMap[miColorIdx] = apodo;
+            let activos = []; let nicksMap = {}; let globalIdsMap = {}; let nombresBots = ['Carlos', 'David', 'Luis']; let bIndex = 0;
+            activos.push(miColorIdx); nicksMap[miColorIdx] = apodo; globalIdsMap[miColorIdx] = miGlobalId;
 
-            if (numJugadores === 2) { let opuesto = (miColorIdx + 2) % 4; activos.push(opuesto); nicksMap[opuesto] = nombresBots[0]; } 
-            else { for (let i = 0; i < 4; i++) { if (i !== miColorIdx) { activos.push(i); nicksMap[i] = nombresBots[bIndex++]; } } }
+            if (numJugadores === 2) { let opuesto = (miColorIdx + 2) % 4; activos.push(opuesto); nicksMap[opuesto] = nombresBots[0]; globalIdsMap[opuesto] = 'bot'; } 
+            else { for (let i = 0; i < 4; i++) { if (i !== miColorIdx) { activos.push(i); nicksMap[i] = nombresBots[bIndex++]; globalIdsMap[i] = 'bot'; } } }
             
             activos.sort((a,b) => a-b);
             document.getElementById('capa-lobby').style.display = 'none';
-            distribuirEvento({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] });
+            distribuirEvento({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, globalIdsMap: globalIdsMap, turnoInicial: activos[0] });
         }
 
         // ==========================================
@@ -474,11 +508,15 @@
         function procesarEventoRemoto(ev) {
             switch(ev.tipo) {
                 case 'START':
-                    coloresActivos = ev.activos; nombresJugadores = ev.nicksMap || {}; turno = ev.turnoInicial; 
+                    coloresActivos = ev.activos; 
+                    nombresJugadores = ev.nicksMap || {}; 
+                    globalIdsJugadores = ev.globalIdsMap || {};
+                    turno = ev.turnoInicial; 
                     if (ev.strikesBots) strikesJugadores = ev.strikesBots;
                     actualizarHostLocal();
                     codigosColor.forEach(c => puntosTorneo[c] = 0);
                     actualizarTablaTorneo();
+                    renderizarPerfiles();
                     codigosColor.forEach(c => { if (!coloresActivos.includes(codigosColor.indexOf(c))) { for(let i=0; i<4; i++) { let f = document.getElementById(`${c}-${i}`); if(f) f.style.display = 'none'; } } });
                     reiniciarTurnoVisual();
                     break;
@@ -885,6 +923,27 @@
 
             document.getElementById('texto-ganador').innerHTML = `El ganador absoluto es:<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span>`;
             document.getElementById('modal-ganador').style.display = 'block';
+
+            if (!esModoLocal && miColorIdx !== null && strikesJugadores[miColorIdx] < 2) {
+                db.ref('usuarios/' + miGlobalId + '/estadisticas/partidasJugadas').set(firebase.database.ServerValue.increment(1));
+                
+                if (clasificacion[0] === codigosColor[miColorIdx]) {
+                    db.ref('usuarios/' + miGlobalId + '/estadisticas/victorias').set(firebase.database.ServerValue.increment(1));
+                } else {
+                    db.ref('usuarios/' + miGlobalId + '/estadisticas/derrotas').set(firebase.database.ServerValue.increment(1));
+                }
+
+                setTimeout(() => {
+                    db.ref('usuarios/' + miGlobalId + '/estadisticas').once('value').then(snap => {
+                        let stats = snap.val();
+                        if (stats && stats.partidasJugadas > 0) {
+                            let victorias = stats.victorias || 0;
+                            let efectividad = Math.round((victorias / stats.partidasJugadas) * 100);
+                            db.ref('usuarios/' + miGlobalId + '/estadisticas/porcentajeEfectividad').set(efectividad);
+                        }
+                    });
+                }, 1500);
+            }
         }
 
         function calcularPuntosTorneo() {
@@ -939,6 +998,56 @@
             });
             turno = primerTurno !== undefined ? primerTurno : coloresActivos[0];
             reiniciarTurnoVisual();
+        }
+
+        // ==========================================
+        // PERFILES Y ESTADÍSTICAS
+        // ==========================================
+        function renderizarPerfiles() {
+            const contenedor = document.getElementById('perfiles-jugadores');
+            if (!contenedor) return;
+            contenedor.innerHTML = "";
+            coloresActivos.forEach(idx => {
+                let colorHex = codigosColor[idx];
+                let nick = nombresJugadores[idx];
+                let btn = document.createElement('div');
+                btn.style.cssText = `background: ${colorHex}; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; cursor: pointer; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); font-size: 14px; transition: transform 0.2s;`;
+                btn.innerText = nick;
+                btn.onmouseover = () => btn.style.transform = 'scale(1.1)';
+                btn.onmouseout = () => btn.style.transform = 'scale(1)';
+                btn.onclick = () => verPerfil(idx);
+                contenedor.appendChild(btn);
+            });
+        }
+
+        function verPerfil(idx) {
+            let nick = nombresJugadores[idx];
+            let gId = globalIdsJugadores[idx];
+            
+            document.getElementById('perfil-nick').innerText = "Perfil: " + nick.toUpperCase();
+            document.getElementById('perfil-winrate').innerText = "...";
+            document.getElementById('perfil-jugadas').innerText = "...";
+            document.getElementById('perfil-victorias').innerText = "...";
+            
+            document.getElementById('modal-perfil').style.display = 'block';
+            
+            if (!gId || gId === 'bot') {
+                document.getElementById('perfil-nick').innerText = "Perfil: " + nick.toUpperCase() + " (Sin Registro)";
+                document.getElementById('perfil-winrate').innerText = "-";
+                document.getElementById('perfil-jugadas').innerText = "-";
+                document.getElementById('perfil-victorias').innerText = "-";
+            } else {
+                db.ref('usuarios/' + gId + '/estadisticas').once('value').then(snap => {
+                    let stats = snap.val() || {};
+                    let jugadas = stats.partidasJugadas || 0;
+                    let victorias = stats.victorias || 0;
+                    let efectividad = stats.porcentajeEfectividad || 0;
+                    
+                    document.getElementById('perfil-winrate').innerText = efectividad + "%";
+                    document.getElementById('perfil-jugadas').innerText = jugadas;
+                    document.getElementById('perfil-victorias').innerText = victorias;
+                });
+            }
         }
 
         // ==========================================
