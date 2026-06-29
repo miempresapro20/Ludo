@@ -113,10 +113,10 @@
     </div>
 
     <div id="modal-ganador">
-        <h2 style="color: #f1c40f; font-size: 30px; margin-top: 0;">¡Partida Terminada!</h2>
+        <h2 id="titulo-ganador" style="color: #f1c40f; font-size: 30px; margin-top: 0;">¡Partida Terminada!</h2>
         <h3 id="texto-ganador" style="color: white; font-size: 20px; line-height: 1.5;"></h3>
         <div style="display: flex; gap: 10px; margin-top: 25px;">
-            <button class="btn" style="flex: 1; background: #e67e22; color: white;" onclick="solicitarRevancha()">Jugar Revancha</button>
+            <button id="btn-revancha" class="btn" style="flex: 1; background: #e67e22; color: white;" onclick="solicitarRevancha()">Jugar Revancha</button>
             <button class="btn" style="flex: 1; background: #3498db; color: white;" onclick="cerrarModalGanador()">Ver Tablero</button>
         </div>
     </div>
@@ -178,10 +178,10 @@
     <h1>Ludo Family</h1>
     <div id="contenedor-tablero">
         <img id="tablero-img" src="imagen/tablero_limpio.png" alt="Tablero">
-        <div id="ui-green" class="meta-ui" style="top: 45%; left: 45%;"></div>
-        <div id="ui-yellow" class="meta-ui" style="top: 45%; left: 55%;"></div>
-        <div id="ui-blue" class="meta-ui" style="top: 55%; left: 55%;"></div>
-        <div id="ui-red" class="meta-ui" style="top: 55%; left: 45%;"></div>
+        <div id="ui-green" class="meta-ui" style="top: 50%; left: 43%;"></div>
+        <div id="ui-yellow" class="meta-ui" style="top: 43%; left: 50%;"></div>
+        <div id="ui-blue" class="meta-ui" style="top: 50%; left: 57%;"></div>
+        <div id="ui-red" class="meta-ui" style="top: 57%; left: 50%;"></div>
     </div>
 
     <div id="area-juego">
@@ -350,6 +350,19 @@
                         mostrarAlerta("La sala no existe o ha sido cerrada.");
                         window.history.replaceState(null, '', window.location.pathname);
                         idSala = null;
+                        return;
+                    }
+
+                    if (salaDatos.estado === 'terminada') {
+                        mostrarAlerta("Esta partida ya ha finalizado o expirado.");
+                        window.history.replaceState(null, '', window.location.pathname);
+                        idSala = null;
+                        document.getElementById('capa-lobby').style.display = 'flex';
+                        document.getElementById('capa-lobby').innerHTML = `
+                            <h2>Sala Cerrada</h2>
+                            <p>Esta sala ya ha terminado.</p>
+                            <button class="btn btn-grande" style="background:#3498db; color:white;" onclick="location.search=''">Volver al Inicio</button>
+                        `;
                         return;
                     }
                     
@@ -564,6 +577,23 @@
             partidaRef = db.ref('salas/' + idSala + '/partida');
             partidaRef.once('value').then((snapshot) => {
                 const p = snapshot.val();
+                
+                if (p && p.ultimoEvento && p.ultimoEvento.id) {
+                    let timestampEvento = parseInt(p.ultimoEvento.id.split('_')[0]);
+                    if (Date.now() - timestampEvento > 3600000) { // 1 hora de inactividad
+                        mostrarAlerta("La sala ha expirado por inactividad.");
+                        salaRef.update({ estado: 'terminada' });
+                        window.history.replaceState(null, '', window.location.pathname);
+                        document.getElementById('capa-lobby').style.display = 'flex';
+                        document.getElementById('capa-lobby').innerHTML = `
+                            <h2>Sala Expirada</h2>
+                            <p>Esta partida ha sido cerrada por inactividad.</p>
+                            <button class="btn btn-grande" style="background:#3498db; color:white;" onclick="location.search=''">Volver al Inicio</button>
+                        `;
+                        return;
+                    }
+                }
+
                 if (p && p.coloresActivos) {
                     coloresActivos = p.coloresActivos;
                     nombresJugadores = p.nombresJugadores || {};
@@ -1079,44 +1109,71 @@
             document.getElementById('btn-lanzar').disabled = true;
 
             calcularPuntosTorneo();
-            let ganadorColor = clasificacion[0]; let idxGanador = codigosColor.indexOf(ganadorColor);
-            let nickGanador = nombresJugadores[idxGanador] || ganadorColor;
-
-            document.getElementById('texto-ganador').innerHTML = `El ganador absoluto es:<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span>`;
-            document.getElementById('modal-ganador').style.display = 'block';
             
-            if (rondasTotales > 1 && rondaActual < rondasTotales) {
-                document.getElementById('btn-revancha').innerText = `Jugar Ronda ${rondaActual + 1} de ${rondasTotales}`;
-                document.getElementById('btn-revancha').style.display = 'inline-block';
-                document.getElementById('titulo-ganador').innerText = "Ronda " + rondaActual + " Finalizada";
-            } else if (rondasTotales > 1 && rondaActual >= rondasTotales) {
-                document.getElementById('btn-revancha').style.display = 'none';
-                document.getElementById('titulo-ganador').innerText = "¡FIN DEL TORNEO!";
+            let esFinDeTorneo = (rondasTotales > 1 && rondaActual >= rondasTotales);
+            
+            let ganadorRondaColor = clasificacion[0]; 
+            let idxGanadorRonda = codigosColor.indexOf(ganadorRondaColor);
+            let nickGanadorRonda = nombresJugadores[idxGanadorRonda] || ganadorRondaColor;
+
+            let ganadorColor = ganadorRondaColor;
+            let nickGanador = nickGanadorRonda;
+
+            if (esFinDeTorneo) {
+                let ranking = coloresActivos.map(idx => codigosColor[idx]);
+                ranking.sort((a, b) => puntosTorneo[b] - puntosTorneo[a]);
+                ganadorColor = ranking[0];
+                let idxGanadorTorneo = codigosColor.indexOf(ganadorColor);
+                nickGanador = nombresJugadores[idxGanadorTorneo] || ganadorColor;
+            }
+
+            if (rondasTotales > 1) {
+                if (!esFinDeTorneo) {
+                    document.getElementById('texto-ganador').innerHTML = `Ganador de la Ronda ${rondaActual}:<br><br> <span style="color:${ganadorRondaColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanadorRonda}</span>`;
+                    document.getElementById('btn-revancha').innerText = `Jugar Ronda ${rondaActual + 1} de ${rondasTotales}`;
+                    document.getElementById('btn-revancha').style.display = 'inline-block';
+                    document.getElementById('titulo-ganador').innerText = "Ronda " + rondaActual + " Finalizada";
+                } else {
+                    document.getElementById('texto-ganador').innerHTML = `¡CAMPEÓN DEL TORNEO!<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span><br><br><span style="font-size: 16px;">Con ${puntosTorneo[ganadorColor]} puntos en total.</span>`;
+                    document.getElementById('btn-revancha').style.display = 'none';
+                    document.getElementById('titulo-ganador').innerText = "¡FIN DEL TORNEO!";
+                }
             } else {
+                document.getElementById('texto-ganador').innerHTML = `El ganador absoluto es:<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span>`;
                 document.getElementById('btn-revancha').innerText = "Solicitar Revancha";
                 document.getElementById('btn-revancha').style.display = 'inline-block';
                 document.getElementById('titulo-ganador').innerText = "¡Tenemos un Ganador!";
             }
+            
+            document.getElementById('modal-ganador').style.display = 'block';
+
+            if (!esModoLocal && esFinDeTorneo) {
+                if (salaRef) salaRef.update({ estado: 'terminada' });
+            }
 
             if (!esModoLocal && miColorIdx !== null && strikesJugadores[miColorIdx] < 2) {
-                db.ref('usuarios/' + miGlobalId + '/estadisticas/partidasJugadas').set(firebase.database.ServerValue.increment(1));
+                let registrarStats = (rondasTotales === 1) || esFinDeTorneo;
                 
-                if (clasificacion[0] === codigosColor[miColorIdx]) {
-                    db.ref('usuarios/' + miGlobalId + '/estadisticas/victorias').set(firebase.database.ServerValue.increment(1));
-                } else {
-                    db.ref('usuarios/' + miGlobalId + '/estadisticas/derrotas').set(firebase.database.ServerValue.increment(1));
-                }
+                if (registrarStats) {
+                    db.ref('usuarios/' + miGlobalId + '/estadisticas/partidasJugadas').set(firebase.database.ServerValue.increment(1));
+                    
+                    if (ganadorColor === codigosColor[miColorIdx]) {
+                        db.ref('usuarios/' + miGlobalId + '/estadisticas/victorias').set(firebase.database.ServerValue.increment(1));
+                    } else {
+                        db.ref('usuarios/' + miGlobalId + '/estadisticas/derrotas').set(firebase.database.ServerValue.increment(1));
+                    }
 
-                setTimeout(() => {
-                    db.ref('usuarios/' + miGlobalId + '/estadisticas').once('value').then(snap => {
-                        let stats = snap.val();
-                        if (stats && stats.partidasJugadas > 0) {
-                            let victorias = stats.victorias || 0;
-                            let efectividad = Math.round((victorias / stats.partidasJugadas) * 100);
-                            db.ref('usuarios/' + miGlobalId + '/estadisticas/porcentajeEfectividad').set(efectividad);
-                        }
-                    });
-                }, 1500);
+                    setTimeout(() => {
+                        db.ref('usuarios/' + miGlobalId + '/estadisticas').once('value').then(snap => {
+                            let stats = snap.val();
+                            if (stats && stats.partidasJugadas > 0) {
+                                let victorias = stats.victorias || 0;
+                                let efectividad = Math.round((victorias / stats.partidasJugadas) * 100);
+                                db.ref('usuarios/' + miGlobalId + '/estadisticas/porcentajeEfectividad').set(efectividad);
+                            }
+                        });
+                    }, 1500);
+                }
             }
         }
 
