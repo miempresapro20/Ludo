@@ -136,7 +136,10 @@
             </div>
             <div id="controles-online" style="display: none;">
                 <p id="msg-espera" style="margin-top: 20px; font-style: italic; color: #bdc3c7;"></p>
-                <button id="btn-iniciar-partida" class="btn" style="display: none; background: #27ae60; color: white; margin-top: 15px;" onclick="iniciarPartidaOnline()">¡COMENZAR JUEGO!</button>
+                <div id="grupo-botones-iniciar" style="display: none; flex-direction: column; gap: 10px; margin-top: 15px;">
+                    <button class="btn" style="background: #27ae60; color: white;" onclick="iniciarPartidaOnline(false)">Empezar Solo Conectados</button>
+                    <button class="btn" style="background: #8e44ad; color: white;" onclick="iniciarPartidaOnline(true)">Completar con Bots (4 Jugadores)</button>
+                </div>
                 <div style="margin-top: 30px; background: #34495e; padding: 15px; border-radius: 8px;">
                     <p style="font-size: 14px; margin-top: 0;">Comparte este link para invitar:</p>
                     <input type="text" id="link-compartir" readonly style="width: 100%; padding: 8px; font-size: 12px; border-radius: 4px; border: none; text-align: center; color: #333;" onclick="this.select()">
@@ -206,6 +209,8 @@
         let soyElHost = false;   
         
         let strikesJugadores = {0:0, 1:0, 2:0, 3:0};
+        let botVendettas = {};
+        let botPersonalidades = {};
 
         const urlParams = new URLSearchParams(window.location.search);
         let idSala = urlParams.get('sala');
@@ -312,10 +317,20 @@
                     if (ocupado) { btn.disabled = true; btn.innerText = `${colorTxt} (${ocupado.nick})`; }
                     else { btn.disabled = false; btn.innerText = colorTxt; }
                 });
-                const numJugadores = Object.keys(jugadores).length;
-                if (numJugadores >= 2 && miColorIdx !== null) {
-                    document.getElementById('msg-espera').innerText = `Jugadores listos: ${numJugadores}/4`;
-                    document.getElementById('btn-iniciar-partida').style.display = 'inline-block';
+                const listaJugadores = Object.values(jugadores);
+                const numJugadores = listaJugadores.length;
+                
+                if (numJugadores >= 1 && miColorIdx !== null) {
+                    let miToken = localStorage.getItem('ludo_token_' + idSala);
+                    let esCreador = listaJugadores[0].token === miToken;
+                    
+                    if (esCreador) {
+                        document.getElementById('msg-espera').innerText = `Jugadores listos: ${numJugadores}/4. ¡Tú diriges!`;
+                        document.getElementById('grupo-botones-iniciar').style.display = 'flex';
+                    } else {
+                        document.getElementById('msg-espera').innerText = `Jugadores listos: ${numJugadores}/4. Esperando al anfitrión...`;
+                        document.getElementById('grupo-botones-iniciar').style.display = 'none';
+                    }
                 }
             });
             salaRef.child('estado').on('value', (snapshot) => {
@@ -335,15 +350,40 @@
             } else { document.getElementById('botones-colores').style.display = 'none'; }
         }
 
-        function iniciarPartidaOnline() {
+        function iniciarPartidaOnline(conBots) {
             jugadoresRef.once('value').then(snapshot => {
                 const jugadores = snapshot.val() || {};
                 let activos = []; let nicksMap = {};
+                let nombresBots = ['Carlos (Bot)', 'David (Bot)', 'Luis (Bot)']; let bIndex = 0;
+                let strikesIniciales = {0:0, 1:0, 2:0, 3:0};
+                
                 Object.values(jugadores).forEach(j => { activos.push(j.colorIdx); nicksMap[j.colorIdx] = j.nick; });
+                
+                if (!conBots && activos.length < 2) {
+                    return mostrarAlerta("Necesitas al menos 2 jugadores reales para jugar sin bots.");
+                }
+
+                if (conBots) {
+                    for (let i = 0; i < 4; i++) {
+                        if (!activos.includes(i)) {
+                            activos.push(i);
+                            nicksMap[i] = nombresBots[bIndex++];
+                            strikesIniciales[i] = 2; // Nacen como fantasmas para que el Host asuma su IA
+                        }
+                    }
+                }
+                
                 activos.sort((a,b) => a-b);
                 
                 db.ref('salas/' + idSala + '/partida').update({ coloresActivos: activos, nombresJugadores: nicksMap }).then(() => {
-                    db.ref('salas/' + idSala + '/partida/ultimoEvento').set({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, turnoInicial: activos[0] }).then(() => { salaRef.update({ estado: 'jugando' }); });
+                    db.ref('salas/' + idSala + '/partida/ultimoEvento').set({ 
+                        id: Date.now() + "_start", 
+                        tipo: 'START', 
+                        activos: activos, 
+                        nicksMap: nicksMap, 
+                        turnoInicial: activos[0],
+                        strikesBots: strikesIniciales
+                    }).then(() => { salaRef.update({ estado: 'jugando' }); });
                 });
             });
         }
@@ -435,6 +475,7 @@
             switch(ev.tipo) {
                 case 'START':
                     coloresActivos = ev.activos; nombresJugadores = ev.nicksMap || {}; turno = ev.turnoInicial; 
+                    if (ev.strikesBots) strikesJugadores = ev.strikesBots;
                     actualizarHostLocal();
                     codigosColor.forEach(c => puntosTorneo[c] = 0);
                     actualizarTablaTorneo();
@@ -507,6 +548,17 @@
         // CEREBRO MAESTRO DE LA IA
         // ==========================================
         function ejecutarCerebroBot(color) {
+            if (!botPersonalidades[color]) {
+                const tipos = ['Agresivo', 'Corredor', 'Defensivo'];
+                botPersonalidades[color] = tipos[Math.floor(Math.random() * tipos.length)];
+            }
+            let miPersonalidad = botPersonalidades[color];
+            let multComer = 1.0, multCorrer = 1.0, multDefensa = 1.0;
+            
+            if (miPersonalidad === 'Agresivo') { multComer = 1.5; multDefensa = 0.5; }
+            else if (miPersonalidad === 'Corredor') { multCorrer = 1.5; multComer = 0.5; }
+            else if (miPersonalidad === 'Defensivo') { multDefensa = 2.0; multCorrer = 0.8; }
+
             let opciones = [];
             let fichasEnBase = 0; let fichasEnSalida = 0; let fichasEnRuta = 0; let fichasEnPasillo = [];
             
@@ -539,58 +591,96 @@
             }
 
             if (opciones.length > 0) {
-                let eleccion = null;
+                let mejorOpcion = null;
+                let mejorPuntuacion = -99999;
                 
-                let opcionesUtiles = opciones.filter(o => {
-                    if (o.esPasillo && o.nuevaPos !== rutas[color].length - 1) {
-                        if (fichasEnRuta > 0 || fichasEnBase > 0) return false; 
+                let fichasEnAlcabala = estadoFichas[color].filter(pos => pos === COORDENADA_SALIDA).length;
+                
+                opciones.forEach(o => {
+                    let pts = 0;
+                    
+                    if (o.nuevaPos === rutas[color].length - 1) pts += 1000 * multCorrer;
+                    
+                    if (o.accion === 'salir') {
+                        pts += 300 * multCorrer;
+                        if (fichasEnAlcabala === 0) pts += 1500 * multDefensa; 
                     }
-                    return true;
+                    
+                    if (o.esPasillo) pts += 500 * multCorrer;
+                    
+                    let presa = compruebaCapturaSimulada(color, o.nuevaPos);
+                    
+                    if (presa) {
+                        pts += 50000; 
+                        if (botVendettas[color] === presa) pts += 1000; 
+                    } else {
+                        if (o.posActual === COORDENADA_SALIDA && fichasEnAlcabala === 1) {
+                            pts -= 2000;
+                        }
+                        
+                        if (esPosicionPeligrosa(color, o.nuevaPos)) {
+                            pts -= 800 * (2.0 - multComer);
+                        }
+                    }
+                    
+                    const posCoords = rutas[color][o.nuevaPos];
+                    let esSegura = codigosColor.some(c => { let est = rutas[c][COORDENADA_SALIDA]; return Math.abs(est[0] - posCoords[0]) < 2.0 && Math.abs(est[1] - posCoords[1]) < 2.0; });
+                    if (esSegura) pts += 300 * multDefensa;
+                    
+                    pts += o.nuevaPos * 15 * multCorrer;
+                    
+                    let puntuacionFinal = pts;
+                    if (!presa) {
+                        let ruido = (Math.random() * 0.3) - 0.15; 
+                        puntuacionFinal += (pts * ruido);
+                    }
+                    
+                    if (puntuacionFinal > mejorPuntuacion) {
+                        mejorPuntuacion = puntuacionFinal;
+                        mejorOpcion = o;
+                    }
                 });
-                if (opcionesUtiles.length === 0) opcionesUtiles = opciones; 
-
-                let metas = opcionesUtiles.filter(o => o.nuevaPos === rutas[color].length - 1);
-                if (metas.length > 0) eleccion = metas[0];
-
-                if (!eleccion) {
-                    let cazadores = opcionesUtiles.filter(o => compruebaCapturaSimulada(color, o.nuevaPos));
-                    if (cazadores.length > 0) eleccion = cazadores[0];
-                }
-
-                if (!eleccion) {
-                    let salidas = opcionesUtiles.filter(o => o.accion === 'salir');
-                    if (salidas.length > 0) eleccion = salidas[0];
-                }
-
-                if (!eleccion) {
-                    opcionesUtiles.sort((a,b) => a.posActual - b.posActual);
-                    let enSalida = opcionesUtiles.filter(o => o.posActual === COORDENADA_SALIDA);
-                    if (enSalida.length > 0 && fichasEnSalida >= 2) eleccion = enSalida[0]; 
-                    else {
-                        let opcionesEsparcidas = opcionesUtiles.filter(o => {
-                            let hayPropia = estadoFichas[color].some(p => p === o.nuevaPos);
-                            return !hayPropia || o.nuevaPos === COORDENADA_SALIDA;
-                        });
-                        eleccion = opcionesEsparcidas.length > 0 ? opcionesEsparcidas[0] : opcionesUtiles[0]; 
-                    }
-                }
                 
-                distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: eleccion.idx, auto: true });
+                distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: mejorOpcion.idx, auto: true });
             }
         }
 
         function compruebaCapturaSimulada(color, posActual) {
             const posCoords = rutas[color][posActual]; const margen = 2.0;
             let esZonaSegura = codigosColor.some(c => { let est = rutas[c][COORDENADA_SALIDA]; return Math.abs(est[0] - posCoords[0]) < margen && Math.abs(est[1] - posCoords[1]) < margen; });
-            if (esZonaSegura) return false;
+            if (esZonaSegura) return null;
             for (let c of codigosColor) {
                 if (c === color) continue;
                 for (let p of estadoFichas[c]) {
                     if (p === -1 || p >= rutas[c].length - 1) continue;
                     let pEnemigo = rutas[c][p];
-                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) return true; 
+                    if (Math.abs(pEnemigo[0] - posCoords[0]) < margen && Math.abs(pEnemigo[1] - posCoords[1]) < margen) return c; 
                 }
-            } return false;
+            } return null;
+        }
+
+        function esPosicionPeligrosa(colorMio, miPosIndex) {
+            if (miPosIndex >= rutas[colorMio].length - 6) return false; 
+            
+            const posCoords = rutas[colorMio][miPosIndex]; const margen = 2.0;
+            let esSegura = codigosColor.some(c => { let est = rutas[c][COORDENADA_SALIDA]; return Math.abs(est[0] - posCoords[0]) < margen && Math.abs(est[1] - posCoords[1]) < margen; });
+            if (esSegura) return false;
+            
+            for (let c of codigosColor) {
+                if (c === colorMio) continue;
+                for (let p of estadoFichas[c]) {
+                    if (p === -1 || p >= rutas[c].length - 1) continue;
+                    for (let avance = 1; avance <= 6; avance++) {
+                        let pFutura = p + avance;
+                        if (pFutura >= rutas[c].length - 1) continue; 
+                        let coordsFutura = rutas[c][pFutura];
+                        if (Math.abs(coordsFutura[0] - posCoords[0]) < margen && Math.abs(coordsFutura[1] - posCoords[1]) < margen) {
+                            return true; 
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         // ==========================================
@@ -883,6 +973,7 @@
                         estadoFichas[c][idx] = -1; const fichaDefensora = document.getElementById(`${c}-${idx}`);
                         fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%"; fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
                         Object.keys(grupos).forEach(key => { if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key]; });
+                        botVendettas[c] = colorJugador; 
                     }
                 });
             });
