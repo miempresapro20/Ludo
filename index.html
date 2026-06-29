@@ -326,9 +326,25 @@
                     if (found) {
                         solicitarWakeLock(); 
                         esModoLocal = false; 
-                        document.getElementById('paso-0').style.display = 'none';
-                        document.getElementById('capa-lobby').innerHTML = '<h2 style="color:#f1c40f">Reconectando a tu asiento...</h2>';
-                        conectarMotorAFirebase();
+                        
+                        db.ref('salas/' + idSala + '/estado').once('value').then(snapEstado => {
+                            if (snapEstado.val() === 'jugando') {
+                                document.getElementById('paso-0').style.display = 'none';
+                                document.getElementById('capa-lobby').innerHTML = '<h2 style="color:#f1c40f">Reconectando a tu asiento...</h2>';
+                                conectarMotorAFirebase();
+                            } else {
+                                // Reconectando al lobby
+                                document.getElementById('paso-0').style.display = 'none';
+                                document.getElementById('paso-1').style.display = 'none';
+                                document.getElementById('paso-2').style.display = 'block';
+                                document.getElementById('info-sala').innerText = "Sala Online: " + idSala;
+                                document.getElementById('botones-colores').style.display = 'none';
+                                document.getElementById('controles-online').style.display = 'block'; 
+                                salaRef = db.ref('salas/' + idSala); 
+                                jugadoresRef = salaRef.child('jugadores'); 
+                                escucharJugadoresLobbyOnline();
+                            }
+                        });
                     } else {
                         localStorage.removeItem('ludo_token_' + idSala);
                         localStorage.removeItem('ludo_color_' + idSala);
@@ -432,7 +448,6 @@
                 localStorage.setItem('ludo_color_' + idSala, idx);
                 jugadoresRef.push({ nick: apodo, colorIdx: idx, token: myToken, globalId: miGlobalId }); 
                 document.getElementById('botones-colores').style.display = 'none';  
-                document.getElementById('msg-espera').innerText = "Esperando inicio..."; 
             } else { document.getElementById('botones-colores').style.display = 'none'; }
         }
 
