@@ -121,6 +121,17 @@
         <div id="paso-0">
             <h2 style="color: #f1c40f;">Ingresa tu Apodo</h2>
             <input type="text" id="input-apodo" class="input-moderno" placeholder="Ej: Carlos" maxlength="10">
+            
+            <div style="margin: 15px 0;">
+                <label style="font-size:14px; color:#bdc3c7;">Formato de Torneo:</label><br>
+                <select id="select-torneo" style="padding: 10px; font-size: 16px; border-radius: 5px; border: none; width: 250px; text-align: center; margin-top: 5px;">
+                    <option value="1">Partida Única (Revanchas libres)</option>
+                    <option value="3">Torneo Corto (3 Rondas)</option>
+                    <option value="5">Torneo Medio (5 Rondas)</option>
+                    <option value="7">Torneo Largo (7 Rondas)</option>
+                </select>
+            </div>
+
             <button class="btn" style="background: #3498db; color: white;" onclick="seleccionarModoJuego('online')">🌐 Partida Online</button>
             <button class="btn" style="background: #e67e22; color: white;" onclick="seleccionarModoJuego('local')">🏠 Partida Local</button>
             <div style="margin-top: 15px;">
@@ -249,6 +260,7 @@
         
         let partidaRef; let salaRef; let jugadoresRef;
         let modoJuego = ''; let esModoLocal = false; 
+        let rondasTotales = 1; let rondaActual = 1;
         
         let miColorIdx = null; let apodo = "";
         let coloresActivos = []; let nombresJugadores = {}; let globalIdsJugadores = {};
@@ -394,6 +406,10 @@
 
         async function seleccionarModoJuego(modo) {
             solicitarWakeLock(); 
+            const inputApodo = document.getElementById('input-apodo');
+            apodo = inputApodo.value.trim() || "Jugador";
+            rondasTotales = parseInt(document.getElementById('select-torneo').value) || 1;
+            rondaActual = 1;
             modoJuego = modo; esModoLocal = (modo === 'local');
             document.getElementById('paso-0').style.display = 'none';
             document.getElementById('paso-1').style.display = 'block';
@@ -502,7 +518,8 @@
                         nicksMap: nicksMap, 
                         globalIdsMap: globalIdsMap,
                         turnoInicial: activos[0],
-                        strikesBots: strikesIniciales
+                        strikesBots: strikesIniciales,
+                        rondasTotales: rondasTotales
                     }).then(() => { salaRef.update({ estado: 'jugando' }); });
                 });
             });
@@ -518,7 +535,7 @@
             
             activos.sort((a,b) => a-b);
             document.getElementById('capa-lobby').style.display = 'none';
-            distribuirEvento({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, globalIdsMap: globalIdsMap, turnoInicial: activos[0] });
+            distribuirEvento({ id: Date.now() + "_start", tipo: 'START', activos: activos, nicksMap: nicksMap, globalIdsMap: globalIdsMap, turnoInicial: activos[0], rondasTotales: rondasTotales });
         }
 
         // ==========================================
@@ -599,6 +616,8 @@
                     globalIdsJugadores = ev.globalIdsMap || {};
                     turno = ev.turnoInicial; 
                     if (ev.strikesBots) strikesJugadores = ev.strikesBots;
+                    if (ev.rondasTotales) rondasTotales = ev.rondasTotales;
+                    rondaActual = 1;
                     actualizarHostLocal();
                     codigosColor.forEach(c => puntosTorneo[c] = 0);
                     actualizarTablaTorneo();
@@ -659,6 +678,7 @@
                     reiniciarTurnoVisual();
                     break;
                 case 'REVANCHA':
+                    rondaActual++;
                     ejecutarLimpiezaRevancha(ev.primerTurno);
                     break;
             }
@@ -775,6 +795,12 @@
                 });
                 
                 distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: mejorOpcion.idx, auto: true });
+            } else {
+                if (valorDado === 1 || valorDado === 6) {
+                    setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 1000);
+                } else {
+                    setTimeout(() => calcularSiguienteTurnoYEnviar(false), 1000);
+                }
             }
         }
 
@@ -960,7 +986,7 @@
                     let ultimo = codigosColor.find((c, idx) => coloresActivos.includes(idx) && !clasificacion.includes(c));
                     if(ultimo && !clasificacion.includes(ultimo)) { clasificacion.push(ultimo); actualizarClasificacionRonda(); }
                     mostrarPantallaFinal();
-                } else { finalizarMovimientoPasoTurno(color); }
+                } else { finalizarMovimientoPasoTurno(color, false, true); }
 
             } else {
                 fichasAMover.forEach(id => { 
@@ -996,9 +1022,9 @@
                     }
                 } else {
                     if (todasEnDestino.length > 1) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
-                    verificarCaptura(color, nuevaPos);
+                    let hizoCaptura = verificarCaptura(color, nuevaPos);
                     actualizarDistintivos();
-                    finalizarMovimientoPasoTurno(color);
+                    finalizarMovimientoPasoTurno(color, hizoCaptura);
                 }
             }
         }
@@ -1018,6 +1044,19 @@
 
             document.getElementById('texto-ganador').innerHTML = `El ganador absoluto es:<br><br> <span style="color:${ganadorColor}; font-size: 36px; text-transform:uppercase; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${nickGanador}</span>`;
             document.getElementById('modal-ganador').style.display = 'block';
+            
+            if (rondasTotales > 1 && rondaActual < rondasTotales) {
+                document.getElementById('btn-revancha').innerText = `Jugar Ronda ${rondaActual + 1} de ${rondasTotales}`;
+                document.getElementById('btn-revancha').style.display = 'inline-block';
+                document.getElementById('titulo-ganador').innerText = "Ronda " + rondaActual + " Finalizada";
+            } else if (rondasTotales > 1 && rondaActual >= rondasTotales) {
+                document.getElementById('btn-revancha').style.display = 'none';
+                document.getElementById('titulo-ganador').innerText = "¡FIN DEL TORNEO!";
+            } else {
+                document.getElementById('btn-revancha').innerText = "Solicitar Revancha";
+                document.getElementById('btn-revancha').style.display = 'inline-block';
+                document.getElementById('titulo-ganador').innerText = "¡Tenemos un Ganador!";
+            }
 
             if (!esModoLocal && miColorIdx !== null && strikesJugadores[miColorIdx] < 2) {
                 db.ref('usuarios/' + miGlobalId + '/estadisticas/partidasJugadas').set(firebase.database.ServerValue.increment(1));
@@ -1098,6 +1137,7 @@
         // ==========================================
         // PERFILES Y ESTADÍSTICAS
         // ==========================================
+
         function renderizarPerfiles() {
             const contenedor = document.getElementById('perfiles-jugadores');
             if (!contenedor) return;
@@ -1185,20 +1225,29 @@
         function resolverAcoplamientoMatematico(color, nuevaPos, quiereAcoplar) {
             let todasEnDestino = []; estadoFichas[color].forEach((p, idx) => { if (p === nuevaPos && document.getElementById(`${color}-${idx}`).style.display !== 'none') todasEnDestino.push(`${color}-${idx}`); });
             if (quiereAcoplar) grupos[`${color}-${nuevaPos}`] = todasEnDestino;
-            verificarCaptura(color, nuevaPos); actualizarDistintivos(); finalizarMovimientoPasoTurno(color);
+            let hizoCaptura = verificarCaptura(color, nuevaPos); 
+            actualizarDistintivos(); 
+            finalizarMovimientoPasoTurno(color, hizoCaptura);
         }
 
-        function finalizarMovimientoPasoTurno(color) {
+        function finalizarMovimientoPasoTurno(color, hizoCaptura = false, llegoAMeta = false) {
             let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
             if (miColorIdx !== turno && !(esModoLocal && soyElHost) && !(esFantasma && soyElHost)) return; 
-            if (fichasEnMeta[color] >= 4 || (valorDado !== 1 && valorDado !== 6)) { setTimeout(() => calcularSiguienteTurnoYEnviar(false), 500); } 
-            else { setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 500); }
+            
+            if (fichasEnMeta[color] >= 4) {
+                setTimeout(() => calcularSiguienteTurnoYEnviar(false), 500);
+            } else if (hizoCaptura || llegoAMeta || valorDado === 1 || valorDado === 6) {
+                setTimeout(() => distribuirEvento({ tipo: 'REINTENTO_DADO' }), 500);
+            } else {
+                setTimeout(() => calcularSiguienteTurnoYEnviar(false), 500);
+            }
         }
 
         function verificarCaptura(colorJugador, posActual) {
             const posCoords = rutas[colorJugador][posActual]; const margen = 2.0; 
             let esZonaSegura = codigosColor.some(c => { let estrella = rutas[c][COORDENADA_SALIDA]; return Math.abs(estrella[0] - posCoords[0]) < margen && Math.abs(estrella[1] - posCoords[1]) < margen; });
-            if (esZonaSegura) return;
+            if (esZonaSegura) return false;
+            let huboCaptura = false;
             codigosColor.forEach(c => {
                 if (c === colorJugador) return;
                 estadoFichas[c].forEach((p, idx) => {
@@ -1209,9 +1258,11 @@
                         fichaDefensora.style.top = fichaDefensora.dataset.baseX + "%"; fichaDefensora.style.left = fichaDefensora.dataset.baseY + "%";
                         Object.keys(grupos).forEach(key => { if(grupos[key].includes(`${c}-${idx}`)) delete grupos[key]; });
                         botVendettas[c] = colorJugador; 
+                        huboCaptura = true;
                     }
                 });
             });
+            return huboCaptura;
         }
 
         function actualizarEventosClic() {
