@@ -675,10 +675,16 @@
 
         function evaluarOpcionesDespuesDelDado() {
             let actual = codigosColor[turno];
-            let todasEnBase = estadoFichas[actual].every(pos => pos === -1);
+            
+            let puedeMover = estadoFichas[actual].some(pos => {
+                if (pos === -1) return (valorDado === 1 || valorDado === 6);
+                if (pos >= 0 && pos < rutas[actual].length - 1) return true;
+                return false;
+            });
+
             let esFantasma = (!esModoLocal && strikesJugadores[turno] >= 2);
             
-            if (todasEnBase && valorDado !== 6 && valorDado !== 1) {
+            if (!puedeMover) {
                 if (miColorIdx === turno || (esModoLocal && soyElHost && turno !== miColorIdx) || (esFantasma && soyElHost)) {
                     intentosSalida++;
                     if (intentosSalida >= 3) { setTimeout(() => calcularSiguienteTurnoYEnviar(false), 1000); }
@@ -694,6 +700,7 @@
             if (miColorIdx === null || turno !== miColorIdx || valorDado === 0 || color !== codigosColor[turno]) return;
             let posActual = estadoFichas[color][i];
             if (posActual === -1 && valorDado !== 6 && valorDado !== 1) return; 
+            if (posActual >= rutas[color].length - 1) return;
             distribuirEvento({ tipo: 'MOVER', color: color, fichaIdx: i, auto: false });
         }
 
@@ -710,7 +717,11 @@
 
             if (nuevaPos === rutas[color].length - 1) {
                 fichasEnMeta[color] += fichasAMover.length;
-                fichasAMover.forEach(id => document.getElementById(id).style.display = 'none');
+                fichasAMover.forEach(id => {
+                    let [c, idx] = id.split('-');
+                    estadoFichas[c][idx] = nuevaPos;
+                    document.getElementById(id).style.display = 'none';
+                });
                 actualizarMetaUI(color);
                 
                 Object.keys(grupos).forEach(key => { grupos[key] = grupos[key].filter(id => !fichasAMover.includes(id)); if (grupos[key].length <= 1) delete grupos[key]; });
